@@ -1,0 +1,2226 @@
+﻿# IT项目成本估算监控系统 - Claude Code 企业级开发全流程实施方案
+
+## 【方案版本说明】
+- **适配PRD版本**：IT项目成本估算监控系统产品需求文档（V1.0）
+- **生成日期**：2024年
+- **方案类型**：Claude Code全栈开发实施方案
+- **核心交付物**：分阶段开发实施路线 + 可直接执行的精准提示词
+
+---
+
+## 一、PRD需求全量拆解与覆盖校验清单
+
+### 1.1 产品定位与核心目标确认
+
+| 维度 | 内容 | 覆盖状态 |
+|------|------|--------|
+| **产品定位** | 面向国有大行科技子公司的一站式IT项目成本智能管控平台，融合AI大模型、OCR、结构化算法 | ? |
+| **核心用户** | 项目经理（PM）、项目总监、财务核算人员 | ? |
+| **使用频率** | PM日使用、总监周使用、财务按需使用 | ? |
+| **Slogan** | "智能估算，精准管控——让每一分项目成本清晰可见" | ? |
+
+### 1.2 业务目标与衡量指标
+
+| 目标编号 | 目标类别 | 核心要求 | 映射功能模块 |
+|---------|--------|--------|----------|
+| G-01 | 需求评估标准化 | 评估周期缩短≥50% | 模块三（实施成本预估） |
+| G-02 | 成本管控精细化 | 成本核算准确率≥95% | 模块四（成本消耗预估） |
+| G-03 | 偏差监控实时化 | 偏差识别及时率≥90% | 模块五（成本偏差监控） |
+| G-04 | 数据管理安全化 | 数据泄漏事件0次 | 全模块（权限隔离） |
+
+### 1.3 用户角色与权限矩阵
+
+| 角色 | 项目经理(PM) | 项目总监 | 财务核算人员 |
+|-----|------------|--------|----------|
+| **权限范围** | 自己负责项目全权限 | 多项目只读+决策 | 项目财务数据只读 |
+| **核心功能** | 成本估算、预估、监控 | 仪表盘统计、异常预警 | 数据核对、报表下载 |
+| **数据隔离** | 完全隔离，仅查看自己项目 | 查看权限内全部项目 | 只读权限 |
+
+### 1.4 核心业务流程全景图
+
+```
+【项目生命周期成本管控全闭环】
+
+立项阶段 ──→ 实施阶段 ──→ 结项阶段
+   │              │            │
+   ↓              ↓            ↓
+需求文档 →【模块三：成本估算】→ 【模块四：消耗预估】→ 【模块五：偏差监控】→ 成本结算
+   │    解析+参数配+工作量     │    OCR+人力+核算      │    监控+分析+建议
+   │                        │ 实时监控项目燃尽      │ 识别超支风险
+   └────── 数据持久化存储 ────────────────────────────┘
+```
+
+### 1.5 全量功能模块清单与需求映射
+
+| 模块 | 功能点 | PRD对应位置 | 优先级 | 备注 |
+|-----|------|----------|------|------|
+| **模块一：用户登录** | 账号密码登录、身份验证、权限隔离 | 4.1 | P0 | MVP核心 |
+| **模块二：仪表盘首页** | 项目统计、成本监控、进度监控、功能入口 | 4.2 | P0 | MVP核心 |
+| **模块三：实施成本预估** | 文档上传、参数配置、工作量计算、结果展示、Excel导出 | 4.3 | P0/P1 | MVP+增强 |
+| **模块四：成本消耗预估** | OCR识别、信息补充、成本核算、人员调整 | 4.4 | P0/P1 | MVP+增强 |
+| **模块五：成本偏差监控** | 大模型识别、信息确认、成本计算、可视化分析、AI建议 | 4.5 | P0/P1/P2 | MVP+增强+优化 |
+
+### 1.6 全量页面路由清单
+
+| 页面 | 路由 | 对应模块 | P级 | 交互特征 |
+|-----|------|--------|------|--------|
+| 登录页 | /login | 模块一 | P0 | 表单+校验 |
+| 仪表盘首页 | /dashboard | 模块二 | P0 | 卡片+统计+跳转 |
+| 成本估算-上传 | /cost-estimate/upload | 模块三-3.1 | P0 | 文件上传+校验 |
+| 成本估算-参数 | /cost-estimate/config | 模块三-3.2 | P0 | 表单配置 |
+| 成本估算-结果 | /cost-estimate/result | 模块三-3.5 | P0 | 多视图+操作 |
+| 成本消耗-录入 | /cost-consumption/input | 模块四 | P0 | 图片+表单+核算 |
+| 成本消耗-结果 | /cost-consumption/result | 模块四 | P0 | 指标卡片 |
+| 成本偏差-录入 | /cost-deviation/input | 模块五-5.1/5.2 | P0 | 图片+表单+选择 |
+| 成本偏差-结果 | /cost-deviation/result | 模块五-5.3/5.4 | P0 | 图表+建议+表格 |
+
+### 1.7 核心数据流与计算规则
+
+#### 工作量评估数据流
+```
+需求文档 → 【AI解析】→ 功能拆解 → 【参数配置】→ {复杂度基准、系数组} 
+→ 【标准公式计算】→ 各阶段工作量 → 【团队成本映射】→ 各团队成本汇总
+→ 【结构化输出】→ Excel报告
+```
+
+#### 成本消耗数据流
+```
+OA截图 → 【OCR识别】→ {合同金额、售前比、税率、人力成本}
+→ 【信息确认】+ 【人员等级补充】→ 【4项核算公式】
+→ {可消耗成本、日人力成本、可消耗天数、燃尽日期}
+```
+
+#### 成本偏差数据流
+```
+项目多源截图 → 【大模型识别】→ 项目信息+进度+成本
+→ 【基准选择】(工作量评估表/默认比例) → 【阶段成本分解】
+→ 【预期vs实际对比】→ 【偏差分析+AI建议】→ 可视化展示
+```
+
+### 1.8 关键业务规则汇总
+
+| 规则编号 | 规则类型 | 规则描述 |
+|---------|--------|--------|
+| R-0101-0105 | 登录&权限 | 未登录禁用功能；数据严格隔离；密码锁定；会话超时 |
+| R-0201-0209 | 首页统计 | 已完成项目隐藏；成本异常判定；进度偏差判定 |
+| R-0301-0306 | 文档校验 | DOC/DOCX格式；内容完整性；自动重试机制 |
+| R-0311-0324 | 工作量计算 | 各阶段占比合理区间；流程系数自动调整；可追溯 |
+| R-0401-0423 | 成本核算 | 日成本按等级回填；人天最小0.5；重算覆盖 |
+| R-0501-0513 | 偏差监控 | 基准模式选择；比例校验；识别失败允许手动修改 |
+
+---
+
+## 二、系统整体架构与技术方案设计
+
+### 2.1 技术栈选型方案
+
+#### 前端技术栈
+```
+框架层：Vue 3.x + Element Plus
+状态管理：Redux Toolkit
+UI组件库：Ant Design 5.x（企业级规范）
+图表库：ECharts 5.x（复杂数据可视化）
+HTTP客户端：Axios
+文件处理：xlsx（Excel生成）、crypto-js（加密）
+表单验证：React Hook Form + Yup
+工程化：Vite + ESLint + Prettier
+```
+
+**选型依据**：
+- React：大型企业应用的事实标准，生态完整
+- TypeScript：金融系统必选，类型安全
+- Ant Design：国内金融企业规范，组件齐全
+- ECharts：复杂图表需求（折线+柱形+饼图）
+- Redux Toolkit：复杂状态管理，计算结果缓存
+
+#### 后端技术栈
+```
+框架：Node.js + Express.js（或Java Spring Boot备选）
+认证：JWT + 国密算法（SM4）
+数据库：PostgreSQL 14+（金融级稳定性）
+ORM：Sequelize / TypeORM
+文件存储：本地加密存储（满足内网部署要求）
+AI集成：调用AI中台RESTful API
+缓存：Redis（计算结果、session）
+日志：Winston（全量操作日志审计）
+部署：Docker + Kubernetes（可选）
+```
+
+**选型依据**：
+- PostgreSQL：国产金融系统标配，ACID保证
+- JWT：无状态认证，适合分布式
+- 国密SM4：符合网络安全等级保护三级
+- Redis：提升OCR/大模型识别响应
+
+#### 外部服务依赖
+```
+AI大模型：调用AI中台API
+  - 需求文档解析（4.3.1）
+  - 项目信息识别（4.5.1）
+  - AI人员调整建议（4.5.4）
+
+OCR服务：调用基础服务OCR引擎
+  - 合同金额、税率等关键字段识别（4.4.1）
+  - 支持多OCR引擎对比校验
+
+OA系统：数据来源（用户截图）
+  - 无需API对接，通过截图+OCR方式
+```
+
+### 2.2 系统业务架构分层图
+
+```
+┌─────────────────────────────────────────────────────┐
+│               用户操作层（5个核心场景）              │
+├─────────────┬──────────────┬──────────────┬─────────┤
+│  需求评估   │   成本核算   │   成本监控   │  决策   │
+│  (模块三)  │  (模块四)   │  (模块五)   │(首页)  │
+└─────────────┴──────────────┴──────────────┴─────────┘
+              ↓              ↓              ↓
+┌─────────────────────────────────────────────────────┐
+│            业务逻辑层（数据处理&规则引擎）           │
+├──────────────┬──────────────┬──────────────────────┤
+│ 文档解析引擎  │  成本计算引擎│   偏差分析引擎      │
+│ (参数配置)  │ (4个公式)   │ (对比基准)         │
+├──────────────┼──────────────┼──────────────────────┤
+│ 权限&数据隔离 │ 加密&安全     │ 操作日志审计       │
+└──────────────┴──────────────┴──────────────────────┘
+              ↓              ↓              ↓
+┌─────────────────────────────────────────────────────┐
+│             数据访问层（持久化&缓存）               │
+├──────────────┬──────────────┬──────────────────────┤
+│ 项目基础数据  │ 计算结果缓存 │   操作日志          │
+│  (PostgreSQL)│   (Redis)    │  (加密存储)        │
+└──────────────┴──────────────┴──────────────────────┘
+```
+
+### 2.3 数据库表结构大纲
+
+#### 核心表设计
+
+```sql
+-- 1. 用户表（权限隔离基础）
+users (user_id, username, password_hash, role, status, created_at)
+
+-- 2. 项目基础信息表
+projects (project_id, user_id, project_name, status, created_at, updated_at)
+
+-- 3. 成本估算表（需求文档→工作量评估结果）
+cost_estimates (
+  estimate_id, project_id, doc_name, 
+  estimate_params {complexity_base, system_coefficient, process_coefficient, ...},
+  total_workdays, total_cost, teams_breakdown {product, ui, dev, test, pm},
+  status, created_at
+)
+
+-- 4. 参数配置表（可复用模板）
+parameter_templates (
+  template_id, user_id, template_name,
+  config {complexity_map, coefficient_rules, unit_price_map},
+  is_default, created_at
+)
+
+-- 5. 成本消耗表（OA截图→核算结果）
+cost_consumptions (
+  consumption_id, project_id,
+  contract_amount, pre_ratio, tax_rate, external_cost_labor, external_cost_software,
+  current_cost, team_members {name, level, daily_cost, join_date, leave_date},
+  available_cost, daily_labor_cost, available_days, burnout_date,
+  created_at, updated_at
+)
+
+-- 6. 成本偏差监控表（实际vs预期）
+cost_deviations (
+  deviation_id, project_id,
+  baseline_type, baseline_params,
+  expected_stages {stage_name, expected_cost_ratio},
+  actual_stages {stage_name, actual_cost, actual_cost_ratio},
+  deviation_data {stage, deviation_value, variance_direction},
+  ai_suggestions, created_at
+)
+
+-- 7. 操作日志表（审计&追溯）
+audit_logs (
+  log_id, user_id, project_id, action, details, ip_address, created_at
+)
+```
+
+#### 关键字段说明
+- **user_id**: 所有表的最高隔离级别，确保用户数据完全隔离
+- **estimate_params/config**: JSON字段，存储动态参数配置
+- **teams_breakdown**: JSON数组，{team_name, workdays, unit_price, total_cost}
+- **team_members**: JSON数组，支持动态增删，自动按时间区间重算成本
+- **created_at/updated_at**: 所有表标配，支持数据版本追溯
+
+### 2.4 权限体系设计（与PRD角色100%对齐）
+
+```
+级别 │ 角色        │ 登录 │ 查看首页 │ 成本估算 │ 消耗预估 │ 偏差监控 │ 数据导出 │ 其他
+────┼──────────┼──────┼────────┼────────┼────────┼────────┼────────┼──────
+P0  │ 项目经理  │ ?   │ ?      │ ? RWD │ ? RWD │ ? RWD │ ?      │仅自己项目
+P1  │ 项目总监  │ ?   │ ?      │ ? R   │ ? R   │ ? R   │ ?      │权限内全部
+P2  │ 财务核算  │ ?   │ ?      │ ? R   │ ? R   │ ? R   │ ?      │只读所有
+P3  │ 管理员    │ ?   │ ?      │ ? RWD │ ? RWD │ ? RWD │ ?      │全部管理
+
+RWD: Read/Write/Delete; R: Read Only
+```
+
+### 2.5 前端UI/UX落地规范
+
+#### 视觉体系（与Ant Design规范一致）
+```
+主色：#1677FF（企业蓝）
+成功：#52C41A（绿）
+警告：#FAAD14（橙）
+错误：#FF4D4F（红）
+背景：#FAFAFA
+边框：#D9D9D9
+
+字体：系统默认字体栈
+  正文：14px normal
+  标题：16px medium
+  大标题：18px medium
+  
+间距系统：8px基础单位
+  margin: 8px, 16px, 24px, 32px
+  padding: 8px, 12px, 16px, 24px
+```
+
+#### 交互规范
+
+| 场景 | 规范 | 实现 |
+|-----|------|------|
+| 表单提交 | 必填项*标记；实时校验；提交按钮状态反馈 | 必填红*；onChange校验；禁用/加载态 |
+| 长列表 | 分页展示（20条/页）；搜索+筛选 | Table + Pagination |
+| 文件上传 | 进度条；文件大小限制；格式校验 | Upload组件 + 前置校验 |
+| 关键操作 | 二次确认（删除、覆盖、重算） | Modal确认框 |
+| 异常处理 | 网络异常显示"数据加载中"；无数据显示0 | Error Boundary + fallback UI |
+| 数据刷新 | 延迟≤3秒；骨架屏loading | Skeleton + Redux缓存 |
+| 图表交互 | Hover显示详细数据；支持导出 | ECharts tooltip + 下载按钮 |
+
+#### 页面流程规范
+
+```
+【成本估算完整流程】
+1. 【文件上传】→ 格式校验失败 → 提示修正 → 重新上传
+              ↓ 格式通过
+         内容校验失败 → 列出缺失项 → 引导补充 → 重新上传
+              ↓ 内容通过
+         提取功能/技术栈/流程
+2. 【参数配置】→ 展示默认参数 → 支持调整 → 校验合理性
+              ↓ 校验通过
+         保存参数
+3. 【工作量计算】→ 执行4个公式 → 检查占比 → 自动调整流程系数
+                ↓ 占比达标
+            计算各团队成本
+4. 【结果展示】→ 多视图（总览/详细/轨迹）→ 支持重新计算/导出
+```
+
+---
+
+## 三、Claude Code分阶段开发实施方案
+
+### 阶段规划原则
+? **先基建后业务**：权限系统 → 通用组件 → 核心模块  
+? **先框架后细节**：全量页面骨架 → 功能补全 → 交互优化  
+? **先P0后P1**：MVP可用 → 增强功能 → 体验优化  
+? **分阶段交付可验证**：每个阶段完成后可独立运行和测试
+
+### 【阶段一】项目初始化与基础架构搭建（1-2天）
+
+**核心目标**：完成前后端初始化、基础框架搭建、开发环境就绪
+
+**前置条件**：获得PRD、技术栈确认、依赖服务API文档
+
+**详细执行步骤**：
+
+1. **前端初始化**
+   - 用Vite创建React18+TypeScript项目
+   - 配置Ant Design、ECharts、Redux Toolkit、Axios
+   - 建立项目目录结构：src/{pages,components,services,store,utils,styles}
+   - 配置ESLint/Prettier规范
+   - 建立.env环境变量配置（API地址、加密密钥等）
+
+2. **后端初始化**
+   - 初始化Node.js + Express项目
+   - 配置PostgreSQL连接池、Redis客户端
+   - 建立项目目录：src/{routes,controllers,services,models,middleware,config}
+   - 配置路由前缀（/api/v1）、全局错误处理、日志系统
+   - 建立密钥管理（JWT密钥、数据加密密钥）
+
+3. **公共基础建设**
+   - 前后端通信协议定义（统一API response格式）
+   - 认证流程设计（登录→token生成→权限校验→自动登出）
+   - 数据隔离中间件实现（所有查询自动加where user_id=当前用户）
+   - 加密工具函数（密码hash、数据加密/解密）
+
+4. **数据库初始化**
+   - 执行建表脚本（users、projects等7个核心表）
+   - 建立数据库备份策略
+   - 建立测试数据集（3个测试项目）
+
+**阶段交付物**：
+- ? 前端项目框架完整可运行（npm start）
+- ? 后端API框架完整可运行（npm run dev）
+- ? 数据库表及初始数据
+- ? 前后端通信协议文档
+- ? 开发者环境使用手册
+
+**需求覆盖校验**：
+- [ ] 权限隔离基础 (R-0101~0102)
+- [ ] 数据库存储基础 (NF-41)
+
+**验收标准**：
+- 前端访问localhost:5173可看到项目壳
+- 后端GET /api/v1/health返回200
+- 数据库可正常连接且表结构完整
+
+---
+
+### 【阶段二】用户认证与权限体系开发（2-3天）
+
+**核心目标**：完成登录功能、会话管理、权限隔离的全链路实现
+
+**前置条件**：阶段一完成
+
+**详细执行步骤**：
+
+1. **后端认证服务**
+   - 实现POST /api/v1/auth/login接口（校验账号密码、返回JWT token）
+   - 实现JWT middleware（解析token、校验有效期、自动续期）
+   - 实现密码策略（连续错误5次锁定15分钟）
+   - 实现会话超时（30分钟无操作自动登出）
+   - 实现操作日志记录（所有接口自动记录user_id、action、ip）
+
+2. **前端登录页**
+   - 页面layout：居中卡片式登录表单
+   - 表单字段：用户名（必填）、密码（必填）、登录按钮
+   - 表单校验：实时校验、错误提示（账号或密码错误时红色提示）
+   - 成功处理：登录后存储token到localStorage、跳转首页
+   - 失败处理：显示错误信息、清空密码字段
+
+3. **权限隔离实现**
+   - 前端路由守卫：未登录访问任何页面都重定向到login
+   - 后端数据隔离：所有GET/POST/PUT/DELETE接口都自动加where user_id=当前用户
+   - 实现权限检查中间件：检查当前用户是否有操作权限
+   - 实现会话token中间件：每个请求都验证token有效性
+
+4. **会话管理**
+   - 实现登出接口：清除服务端token缓存
+   - 实现自动登出：30分钟无操作自动退出
+   - 实现token刷新机制：token即将过期时自动续期
+
+**阶段交付物**：
+- ? 完整登录流程（输入账号密码→首页）
+- ? 权限隔离中间件
+- ? 会话管理系统
+- ? 操作日志记录功能
+
+**需求覆盖校验**：
+- [x] 账号密码登录 (4.1、AC-0101/0102/0103)
+- [x] 数据权限隔离 (R-0102、NF-11)
+- [x] 密码错误锁定 (R-0104、AC-0105)
+- [x] 会话超时 (R-0105、NF-13)
+- [x] 操作日志 (NF-15)
+
+**验收标准**：
+- 用户A登录后仅看到自己项目
+- 用户A的token放到用户B的localStorage中仍无法访问用户B数据
+- 30分钟无操作后刷新页面自动跳转登录
+- 密码错误5次后账号锁定，15分钟后自动解锁
+
+---
+
+### 【阶段三】通用基础组件与能力库开发（2天）
+
+**核心目标**：沉淀可复用的UI组件、工具函数、通用业务逻辑
+
+**前置条件**：阶段一、二完成
+
+**详细执行步骤**：
+
+1. **通用UI组件库**
+   - FormInput：支持实时校验、错误提示、loading态
+   - FileUpload：支持拖拽、多文件、进度条、格式校验
+   - DataTable：支持分页、搜索、排序、无数据处理
+   - ChartWrapper：ECharts通用包装，支持loading、错误处理、导出
+   - StatisticCard：数字卡片，支持标题、大数字、单位、趋势
+
+2. **工具函数库**
+   ```typescript
+   // 加密解密
+   encryptPassword(pwd) / decryptData(encrypted)
+   
+   // 数据格式化
+   formatCurrency(amount) / formatDate(date)
+   
+   // API调用包装
+   request(url, method, data) // 自动加token、错误处理
+   
+   // 计算函数
+   calculateWorkdays(amount, dailyCost) / calculateBurnoutDate(availableDays)
+   
+   // 数据导出
+   exportToExcel(data, columns, filename)
+   ```
+
+3. **Redux全局状态管理**
+   - 用户状态：登录用户信息、权限
+   - 项目状态：当前项目、项目列表
+   - 计算结果缓存：估算结果、消耗结果、偏差结果
+   - UI状态：加载中、错误信息、成功提示
+
+4. **通用业务逻辑**
+   - 数据校验规则库（DOC/DOCX格式、参数合理性、占比合计100%）
+   - 成本计算函数库（4个核心公式、团队成本分配）
+   - 异常处理统一方案（网络异常、API错误、业务校验错误）
+
+**阶段交付物**：
+- ? 15+个通用UI组件
+- ? 20+个工具函数
+- ? Redux store完整实现
+- ? API调用层（services）完整实现
+
+**需求覆盖校验**：
+- [ ] 通用数据隔离能力 (R-0102)
+- [ ] 通用加密能力 (NF-12、NF-14)
+
+**验收标准**：
+- FormInput组件在所有表单中复用
+- 所有API调用都经过request函数
+- calculateWorkdays(100, 10) === 10正确执行
+
+---
+
+### 【阶段四】仪表盘首页开发（1-2天）
+
+**核心目标**：完成首页仪表盘、统计数据展示、功能入口跳转
+
+**前置条件**：阶段一、二、三完成
+
+**详细执行步骤**：
+
+1. **后端首页统计接口**
+   - GET /api/v1/dashboard/stats 返回：
+     ```json
+     {
+       "total_projects": 8,
+       "ongoing_projects": 4,
+       "completed_projects": 2,
+       "cost_abnormal_count": 1,  // 可消耗成本<0 或 天数<7
+       "high_risk_count": 2,      // 可消耗天数<7
+       "upcoming_burnout": "项目A (2024-03-31)",
+       "progress_deviation_count": 1
+     }
+     ```
+
+2. **前端首页组件开发**
+   - 顶部导航：Logo、用户名、退出按钮
+   - 上方统计区：4个指标卡片（总项目数、成本异常数、高风险数、进度偏差数）
+   - 下方功能入口：3个大卡片（成本估算、成本监控、成本偏差）
+   - 异常数据标红：{可消耗成本<0} 或 {可消耗天数<7}
+
+3. **跳转与返回逻辑**
+   - 点击功能卡片跳转到对应页面
+   - 从功能页返回首页时自动刷新统计数据（≤3秒）
+
+4. **仪表盘数据实时性**
+   - 首页加载时查询统计数据
+   - 从其他页面返回首页时重新查询
+   - 支持手动刷新按钮
+
+**阶段交付物**：
+- ? 仪表盘首页完整可用
+- ? 统计接口准确返回
+- ? 功能跳转正常
+
+**需求覆盖校验**：
+- [x] 首页统计展示 (4.2、AC-0201~0206)
+- [x] 异常数据标红 (R-0203/0204/0205、AC-0202)
+- [x] 无数据处理 (R-0208、NF-23)
+- [x] 数据刷新 (R-0206、NF-02)
+
+**验收标准**：
+- 登录成功后看到4个统计卡片和3个功能入口
+- 存在成本异常的项目数字为红色
+- 点击任意功能卡片可跳转到对应页面
+- 从功能页返回后统计数据自动更新
+
+---
+
+### 【阶段五】实施成本预估模块开发（4-5天）
+
+**核心目标**：完成"需求文档→参数配置→工作量计算→结果展示→Excel导出"的完整闭环
+
+**前置条件**：阶段一~四完成
+
+**执行步骤**：
+
+#### 5.1 文件上传与校验子流程（1.5天）
+
+**后端**：
+- POST /api/v1/estimate/upload
+  - 接收DOC/DOCX文件（≤10MB）
+  - 调用AI中台API进行文档解析
+  - 返回解析结果：{chapters, functions, techStack, businessProcesses, nfr}
+  - 建立错误重试机制（失败自动重试1次）
+
+**前端**：
+- 文件上传组件（拖拽+点击）
+- 进度条展示上传进度
+- 校验失败时列出缺失项（需求/设计/开发/测试/投产）
+- 支持重新上传
+
+#### 5.2 参数配置子流程（1.5天）
+
+**后端**：
+- GET /api/v1/estimate/params/defaults 返回6类参数默认值
+- POST /api/v1/estimate/params/validate 校验参数合理性
+  - 所有参数值必须为正数
+  - 系数在合理范围内
+
+**前端**：
+- 展示6类参数的配置表单：
+  1. 复杂度基准（5个等级：0.5/1/1.5/2/2.5）
+  2. 系统关联度系数（4个等级：1/1.5/2/3）
+  3. 流程系数（6个阶段：0.7/0.3/0.5/1.2/0.7/0.5等）
+  4. 技术栈难度系数（4个类型：1.0/1.3/1.4/1.6）
+  5. 人天单价（7个角色：产品/UI/前端/后端/功能测试/性能测试/PM）
+  6. 管理系数（3个团队规模：0.15/0.20/0.25）
+- 每个参数均可修改，支持保存为个人模板
+
+#### 5.3 工作量评估计算子流程（1day）
+
+**后端**：
+- POST /api/v1/estimate/calculate
+  ```
+  输入：{doc_parse_result, params}
+  
+  执行：对每个功能点应用4阶段公式
+  - 需求：Σ（基准×关联×流程）×(1+管理)
+  - UI设计：Σ（基准×关联×流程）×(1+管理)
+  - 技术设计：Σ（基准×关联×流程×技术栈）×(1+管理)
+  - 开发：Σ（基准×关联×流程×技术栈）×(1+管理)
+  - 技术测试/性能测试/投产：...
+  
+  检查：各阶段占比是否在合理区间（需求12-18%, 设计12-20%...）
+  若超出：自动调整流程系数使占比回到合理区间
+  
+  输出：{total_workdays, stage_breakdown, teams_breakdown, calculation_trace}
+  ```
+
+**前端**：
+- 点击"计算工作量"触发后端计算
+- 显示计算进度条
+- 计算完成后自动进入结果展示页
+
+#### 5.4 结果展示与导出子流程（1day）
+
+**前端多视图设计**：
+1. **总览视图**：4个指标卡片（总人天、预估成本、功能数、人月）+ 2个图表（团队工作量饼图、阶段工作量柱状图）
+2. **详细分析视图**：表格展示各阶段工作量明细（需求/设计/开发/技术测试/性能测试/投产）
+3. **计算轨迹视图**：每个功能点的计算过程可追溯（基准值、各系数、公式、结果、时间戳）
+4. **操作**：支持【重新计算】【导出Excel】
+
+**后端**：
+- POST /api/v1/estimate/export 生成Excel文件
+  - 包含基础信息区（项目编号、系统名称）
+  - 核心评估区（模块、功能、工作项描述、工作量、各角色成本）
+  - 合计行（各阶段合计、总计人天人月）
+
+**前端**：
+- 生成Excel后自动下载到本地
+
+**阶段交付物**：
+- ? 文件上传页完整
+- ? 参数配置页完整
+- ? 工作量计算逻辑完整
+- ? 结果展示页完整（多视图）
+- ? Excel导出功能完整
+
+**需求覆盖校验**：
+- [x] 文档上传校验 (4.3.1、AC-0301/0302/0303)
+- [x] 参数配置 (4.3.2、AC-0305/0306)
+- [x] 工作量计算 (4.3.3、AC-0307/0308/0309)
+- [x] 各团队成本 (4.3.4、AC-0310)
+- [x] 结果展示 (4.3.5、AC-0311/0312/0313)
+- [x] 计算可追溯 (NF-42)
+
+**验收标准**：
+- 上传DOC/DOCX格式文件后进入参数配置
+- 修改任意参数后重新计算，结果改变
+- 各阶段占比在合理范围内
+- 导出Excel文件包含所有数据和图表
+- 计算轨迹中能看到每个功能点的详细计算过程
+
+---
+
+### 【阶段六】成本消耗预估模块开发（3-4天）
+
+**核心目标**：完成"OA截图→OCR识别→信息补充→成本核算→人员调整"的完整链路
+
+**前置条件**：阶段一~五完成
+
+**执行步骤**：
+
+#### 6.1 图片上传与OCR识别（1day）
+
+**后端**：
+- POST /api/v1/consumption/upload-ocr
+  - 接收1张或多张JPG/PNG截图（≤5M/张）
+  - 调用OCR服务提取6个字段：合同金额、售前比例、税率、外采人力成本、外采软件成本、当前人力成本
+  - 支持多张图片同字段覆盖（以最后一张为准）
+  - 返回识别结果
+
+**前端**：
+- 拖拽或点击上传区域上传截图
+- 进度条显示上传进度
+- 上传完成后自动调用后端OCR
+- 展示OCR识别结果到表单中
+
+#### 6.2 项目信息确认与补充（1day）
+
+**后端**：
+- 支持人员等级选择：P5/P6/P7/P8四个等级，对应日成本：0.16/0.21/0.26/0.36万元
+- 支持添加/删除/编辑成员
+
+**前端**：
+- 展示OCR识别的6个字段，支持手动修改
+- 展示成员列表表格：姓名、等级、日成本、入项时间、离项时间
+- 支持【添加成员】【删除成员】操作
+- 选择成员等级后日成本自动回填（不可手动修改）
+
+#### 6.3 成本自动核算（1day）
+
+**后端**：
+- POST /api/v1/consumption/calculate-cost
+  ```
+  输入：{contract_amount, pre_ratio, tax_rate, external_labor, external_software, current_cost, team_members}
+  
+  执行4个公式：
+  1. 可消耗成本 = 合同金额×(1-售前比-税率)-外采人力-外采软件-当前成本
+  2. 日人力成本 = Σ 所有成员日成本
+  3. 可消耗天数 = ROUND(可消耗成本 / 日人力成本, 0)
+  4. 燃尽日期 = 当前日期 + 可消耗天数（仅工作日，剔除周六日）
+  
+  异常处理：
+  - 若日人力成本=0：提示"无人员成本，无法计算天数"
+  - 若可消耗成本<0：数字标红并提示"已超支"
+  
+  输出：{available_cost, daily_labor_cost, available_days, burnout_date}
+  ```
+
+**前端**：
+- 点击"计算成本"触发后端计算
+- 4个指标卡片展示结果：可消耗成本（绿/红）、日人力成本、可消耗天数、燃尽日期
+- 支持保存项目（持久化到数据库）
+
+#### 6.4 人员方案调整与重算（1day）
+
+**后端**：
+- POST /api/v1/consumption/adjust-team
+  ```
+  支持：
+  - 新增成员：{姓名、等级、入项时间}，系统自动回填日成本和入项至结项的工作日数
+  - 删除成员：删除后重算总日人力成本
+  - 修改离项时间：按实际在岗天数重新摊销成本
+  
+  重算逻辑：按日逐摊成本，按实际在岗天数核算
+  例：成员A 1月1日入项，日成本0.21万，1月31日离项
+  实际在岗天数=20天（剔除周末），该成员应分摊成本=0.21×20
+  ```
+
+**前端**：
+- 支持在成员列表中【编辑离项时间】
+- 支持【新增成员】【删除成员】
+- 点击【重新计算】，4个指标卡片自动更新
+
+**阶段交付物**：
+- ? 图片上传与OCR识别完整
+- ? 项目信息确认与补充完整
+- ? 成本自动核算完整
+- ? 人员调整与重算完整
+- ? 数据持久化完整
+
+**需求覆盖校验**：
+- [x] 图片上传与OCR (4.4.1、AC-0401/0402/0403)
+- [x] 人员等级与日成本 (4.4.2、AC-0404/0405)
+- [x] 成本核算 (4.4.3、AC-0406/0407/0408)
+- [x] 人员调整与重算 (4.4.4、AC-0409/0410)
+- [x] 数据持久化 (NF-41)
+
+**验收标准**：
+- 上传OA截图后OCR自动识别6个关键字段
+- 选择成员等级后日成本自动回填
+- 点击计算成本后4个指标卡片展示准确结果
+- 修改成员后重新计算，结果改变
+- 关闭页面重新打开后数据仍存在
+
+---
+
+### 【阶段七】成本偏差监控模块开发（4-5天）
+
+**核心目标**：完成"项目信息上传→基准选择→成本核算→可视化分析→AI建议"的完整链路
+
+**前置条件**：阶段一~六完成
+
+**执行步骤**：
+
+#### 7.1 项目信息上传与大模型识别（1.5day）
+
+**后端**：
+- POST /api/v1/deviation/upload-intelligence
+  ```
+  接收4类截图：
+  1. 项目合同金额截图
+  2. 当前人力成本截图
+  3. 当前成员明细截图
+  4. DevOps任务完成情况截图
+  
+  调用大模型API智能识别，提取：
+  - 项目名称
+  - 项目合同金额（XX万元）
+  - 当前人力成本（XX万元）
+  - 项目成员信息（姓名/部门/岗位/级别/单价/已报工时）
+  - DevOps任务完成比例（如50%）
+  
+  返回识别结果
+  ```
+
+**前端**：
+- 4个分别的上传区（项目合同/人力成本/成员明细/任务进度）
+- 上传完成后自动触发大模型识别
+- 展示识别结果供用户确认
+
+#### 7.2 项目信息确认与基准选择（1.5day）
+
+**前端**：
+- 回显大模型识别的信息，支持手动修改
+- 成员信息确认：补充职级、选择角色（项目负责人/产品/UI/开发/测试/PM等）
+- 成本偏差分析基准选择：
+  - **模式1**：上传工作量评估表（大模型解析，计算各阶段占比）
+  - **模式2**：使用系统默认比例（需求15%、设计16%、开发35%、技术测试20%、性能8%、投产6%），支持修改但合计=100%
+- 预期利润空间输入（如20%）
+
+**后端**：
+- POST /api/v1/deviation/confirm-baseline
+  - 校验各阶段比例之和=100%
+  - 保存基准配置
+
+#### 7.3 成本核算（核心）（1.5day）
+
+**后端**：
+```
+POST /api/v1/deviation/calculate
+输入：确认后的项目信息、基准配置
+
+前置公式：各角色成本 = Σ（各角色人员已报工时/8) × 单价
+
+核心计算：
+1. 需求成本 = Σ 产品经理角色成本
+2. 设计成本 = Σ UI设计成本 + Σ(开发+技术经理)×0.3
+3. 开发成本 = Σ(开发+技术经理)×0.7
+4. 技术测试 = Σ 测试工程师成本×0.7
+5. 性能测试 = Σ 测试工程师成本×0.3
+6. 投产成本 = Σ(需求+设计+开发+技术测试+性能)×0.02
+7. AC（总成本）= Σ 所有成员成本
+
+偏差计算：
+- 成本消耗占比(%) = AC / (合同金额×(1-利润比))
+- 成本偏差 = 实际消耗占比 - 标准阶段占比
+
+各团队预期vs实际成本计算：
+- 产品预期 = 产品阶段工作量×产品经理单价
+- 产品实际 = Σ产品经理角色成本
+- UI/研发/测试类似...
+
+输出：{
+  stage_costs: [{stage, expected_ratio, actual_ratio, actual_cost, deviation}...],
+  team_costs: [{team, expected_cost, actual_cost}...],
+  ac, cost_consumption_ratio, ai_suggestions_data
+}
+```
+
+**前端**：
+- 核算结果展示：4个顶部指标卡片（合同金额、成本消耗、任务进度、偏差）
+
+#### 7.4 可视化图表展示（1.5day）
+
+**前端**：
+1. **区域一：成本消耗与任务进度比对**
+   - 成本消耗条：XX%（进度条）
+   - 任务进度条：XX%（进度条）
+   - 偏差指标：XX% ??（偏高/偏低/正常）
+
+2. **区域二：各阶段成本偏差折线图**
+   - 横轴：6个阶段（需求、设计、开发、技术测试、性能测试、投产）
+   - 纵轴：成本占比(%)
+   - 2条折线：实际成本折线 vs 预期成本折线
+   - Hover时显示：实际占比、预期占比、实际成本金额
+
+3. **区域三：各团队人员成本双柱形图**
+   - 横轴：5个团队（产品、UI、研发、测试、PM）
+   - 纵轴：成本占比(%)
+   - 双柱形：预期占比 vs 实际占比
+   - Hover时显示详细数据
+
+4. **区域四：AI人员调整建议**
+   - 大模型根据偏差情况自动生成调整建议
+   - 包含各阶段建议、总体建议、预期效果
+
+5. **区域五：详细成本分析表**
+   - 表格展示：阶段、预期比例、实际比例、实际成本、偏差
+
+**后端**：
+- POST /api/v1/deviation/generate-ai-suggestions
+  ```
+  根据偏差数据调用大模型生成建议：
+  {
+    "suggestions": [
+      {
+        "stage": "开发",
+        "issue": "开发成本超预期10%，可能是需求变更导致",
+        "suggestion": "建议减少开发人员或加快进度，预期可降低成本5%"
+      },
+      ...
+    ],
+    "overall_suggestion": "整体成本超支，建议调整人力方案"
+  }
+  ```
+
+**阶段交付物**：
+- ? 项目信息上传与大模型识别完整
+- ? 信息确认与基准选择完整
+- ? 成本核算逻辑完整
+- ? 可视化图表完整
+- ? AI建议生成完整
+
+**需求覆盖校验**：
+- [x] 项目信息上传 (4.5.1、AC-0501)
+- [x] 基准选择 (4.5.2、AC-0502/0503)
+- [x] 成本核算 (4.5.3、AC-0504)
+- [x] 图表展示 (4.5.4、AC-0505/0506/0507)
+- [x] AI建议 (4.5.4、AC-0507)
+- [x] 详细分析表 (4.5.4、AC-0508)
+
+**验收标准**：
+- 上传4类截图后大模型正确识别项目信息
+- 选择模式1或模式2后基准配置保存成功
+- 计算结果中各阶段成本准确（按公式计算）
+- 折线图正确展示实际vs预期成本对比
+- AI建议根据偏差数据合理生成
+- 表格数据与图表保持一致
+
+---
+
+### 【阶段八】高级功能与体验优化（2-3day）
+
+**核心目标**：完成P1功能、界面优化、性能调优
+
+**详细执行步骤**：
+
+1. **实施成本预估高级功能**
+   - ? P1: 评估结果详细分析视图（合规校验、详细功能明细）
+   - ? P1: 重新计算功能（修改参数后重新计算）
+   - ? P1: 标准化工作量估算表格导出
+
+2. **成本消耗预估高级功能**
+   - ? P1: 人员方案调整与重算完整体验优化
+
+3. **成本偏差监控高级功能**
+   - ? P1: 可视化图表多维度展示
+   - ? P2: AI人员调整建议优化
+   - ? P1: 详细成本分析明细表
+
+4. **界面与交互优化**
+   - 统一loading骨架屏
+   - 异常错误页面友好展示
+   - 移动端适配（1366×768分辨率）
+   - 深色模式支持（可选）
+
+5. **性能优化**
+   - 图表大数据渲染优化
+   - API响应缓存策略
+   - 前端包体积优化（tree shaking）
+   - 数据库查询优化（添加索引）
+
+**阶段交付物**：
+- ? P1功能完整（≥90%）
+- ? 界面美观度提升
+- ? 响应时间优化（各接口响应≤3秒）
+
+**验收标准**：
+- 所有P1功能可用
+- 页面首屏加载时间≤3秒
+- 图表交互流畅，无明显卡顿
+
+---
+
+### 【阶段九】测试、文档与交付（2-3day）
+
+**核心目标**：完成全流程功能测试、文档编写、最终交付
+
+**详细执行步骤**：
+
+1. **功能测试**
+   - 执行《验收标准》中的所有AC（Acceptance Criteria）
+   - 手工测试所有用户故事
+   - 边界值测试（输入极端值）
+   - 权限测试（确保数据隔离完全）
+   - 性能测试（≥50并发用户）
+
+2. **文档编写**
+   - API文档（Swagger/OpenAPI格式）
+   - 前端组件文档（Storybook）
+   - 数据库设计文档
+   - 部署手册（Docker、k8s）
+   - 用户使用手册
+
+3. **Bug修复**
+   - 记录所有测试发现的bug
+   - 按优先级（P0/P1/P2）修复
+   - 回归测试
+
+4. **安全审计**
+   - SQL注入防护检查
+   - XSS防护检查
+   - 敏感数据加密检查
+   - 操作日志记录完整性检查
+
+**交付物清单**：
+- ? 可部署的前后端代码
+- ? 数据库初始化脚本
+- ? API完整文档
+- ? 部署运维手册
+- ? 用户使用指南
+- ? 测试报告
+- ? 代码审查意见
+
+---
+
+## 四、各阶段配套Claude Code可执行精准提示词
+
+### 【提示词模板说明】
+下文提示词均可直接复制到Claude Code中执行。每个提示词包含：
+- **角色定位**：你在项目中的职责
+- **前置输入**：上一阶段的交付物、PRD需求
+- **核心目标**：本阶段需要完成什么
+- **刚性约束**：必须遵守的规则
+- **详细开发要求**：分步骤说明
+- **交付物规范**：输出标准
+- **验收标准**：如何判断完成
+
+---
+
+### 【阶段一提示词】项目初始化与基础架构
+
+```markdown
+你是企业级全栈系统架构师，负责 IT 项目成本估算监控系统的初始化与基础架构搭建。
+
+【角色与职责】
+- 前端架构：React18 + TypeScript 项目初始化，Vite 构建配置
+- 后端架构：Node.js/Express 项目初始化，数据库设计与初始化
+- 公共基础：API 契约、认证框架、数据隔离中间件
+- 开发工程化：ESLint、Prettier、git hooks 配置
+
+【前置条件】
+? PRD 文档已读（IT项目成本估算监控系统）
+? 技术栈已确认：
+   - 前端：React 18 + TypeScript + Vite + Ant Design 5
+   - 后端：Node.js + Express + PostgreSQL + Redis
+   - AI服务：调用 AI 中台 API（需要 API 文档）
+   - OCR 服务：调用基础服务 OCR 引擎
+
+【核心目标】
+完成项目初始化、基础框架搭建、环境配置，使得：
+? 前端项目可用 npm start 启动，访问 localhost:5173
+? 后端项目可用 npm run dev 启动，访问 localhost:3000
+? 数据库表结构完整，初始数据完成
+? 前后端通信协议明确，API 格式统一
+? 开发规范文档完整
+
+【红线约束】
+1. 不得修改 PRD 中的需求，严格按照技术方案实现
+2. 权限隔离基础必须搭建完整（所有表都有 user_id 字段）
+3. 数据加密必须使用国密 SM4（满足等保三级）
+4. 项目结构必须符合企业级规范（模块化、易扩展）
+
+【详细开发要求】
+
+#### 前端初始化
+1. 创建 Vite + React 18 + TypeScript 项目
+   - 命令：npm create vite@latest cost-estimate-web -- --template react-ts
+   - 清理默认文件，建立项目目录结构：
+     ```
+     src/
+     ├── pages/          # 页面组件（login, dashboard, estimate, consumption, deviation）
+     ├── components/     # 通用组件（Form, Table, Chart 等）
+     ├── services/       # API 调用层（request 函数）
+     ├── store/          # Redux 状态管理
+     ├── hooks/          # 自定义 React Hooks
+     ├── utils/          # 工具函数（加密、格式化、计算）
+     ├── types/          # TypeScript 类型定义
+     ├── styles/         # 全局样式
+     ├── App.tsx
+     └── main.tsx
+     ```
+
+2. 安装依赖（按优先级）：
+   ```
+   npm install react-router-dom@6
+   npm install @reduxjs/toolkit react-redux
+   npm install antd @ant-design/icons
+   npm install echarts for-echarts-react
+   npm install axios
+   npm install dayjs
+   npm install crypto-js
+   npm install xlsx
+   ```
+
+3. 配置 tsconfig.json
+   - 打开 strict: true（类型检查严格）
+   - 配置 paths 别名（@/ 指向 src/）
+
+4. 配置 Vite（vite.config.ts）
+   - 设置 API 代理：/api/ → http://localhost:3000/api/
+   - 配置环境变量（.env.development 和 .env.production）
+
+5. 配置 ESLint + Prettier
+   ```
+   npm install --save-dev eslint @typescript-eslint/parser @typescript-eslint/eslint-plugin prettier
+   创建 .eslintrc.json 和 .prettierrc
+   在 package.json 中配置 lint 脚本：
+   "lint": "eslint src --ext .ts,.tsx",
+   "format": "prettier --write src"
+   ```
+
+6. 创建基础应用壳
+   - App.tsx：路由框架（<BrowserRouter> + <Routes>）
+   - main.tsx：Redux store 初始化、Redux 中间件配置
+
+#### 后端初始化
+1. 创建 Node.js + Express 项目
+   - 创建目录：mkdir cost-estimate-api && cd cost-estimate-api
+   - npm init -y
+   - 安装依赖：
+     ```
+     npm install express cors dotenv
+     npm install pg pg-pool        # PostgreSQL
+     npm install redis             # Redis 缓存
+     npm install jsonwebtoken      # JWT
+     npm install bcryptjs          # 密码加密
+     npm install sm-crypto         # 国密 SM4（如果使用）
+     npm install winston           # 日志
+     npm install --save-dev nodemon ts-node typescript @types/node @types/express
+     ```
+
+2. 建立项目目录结构：
+   ```
+   src/
+   ├── config/          # 配置文件（DB、Redis、JWT 密钥）
+   ├── middleware/      # 中间件（认证、数据隔离、日志）
+   ├── routes/          # 路由（auth、estimate、consumption、deviation）
+   ├── controllers/     # 业务控制器
+   ├── services/        # 业务逻辑（算法、调用外部 API）
+   ├── models/          # 数据库模型
+   ├── types/           # TypeScript 类型定义
+   ├── utils/           # 工具函数（加密、日志、API 调用）
+   ├── app.ts           # Express 应用主文件
+   └── server.ts        # 启动入口
+   ```
+
+3. 创建 tsconfig.json 和 nodemon.json
+
+4. 配置 .env 文件（本地开发环境）
+   ```
+   DATABASE_URL=postgresql://user:password@localhost:5432/cost_estimate_db
+   REDIS_URL=redis://localhost:6379
+   JWT_SECRET=your_secret_key
+   SM4_KEY=your_sm4_key
+   AI_API_URL=http://ai-platform/api/v1
+   OCR_API_URL=http://base-service/api/v1/ocr
+   NODE_ENV=development
+   PORT=3000
+   ```
+
+5. 建立 Express 应用主文件（src/app.ts）：
+   - 配置中间件：cors、express.json()、morgan（日志）
+   - 配置全局错误处理中间件
+   - 配置路由前缀：/api/v1/
+
+6. 建立启动脚本（src/server.ts）：
+   - 启动 HTTP 服务器
+   - 建立数据库连接
+   - 初始化 Redis 连接
+
+#### 数据库初始化
+1. 创建 PostgreSQL 数据库：
+   ```sql
+   CREATE DATABASE cost_estimate_db;
+   ```
+
+2. 执行建表脚本（sql/init.sql）：
+   ```sql
+   -- 1. 用户表
+   CREATE TABLE users (
+     user_id SERIAL PRIMARY KEY,
+     username VARCHAR(100) UNIQUE NOT NULL,
+     password_hash VARCHAR(255) NOT NULL,
+     role VARCHAR(50) DEFAULT 'pm',  -- pm/supervisor/finance/admin
+     status VARCHAR(50) DEFAULT 'active',
+     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+   );
+
+   -- 2. 项目基础表
+   CREATE TABLE projects (
+     project_id SERIAL PRIMARY KEY,
+     user_id INT NOT NULL REFERENCES users(user_id),
+     project_name VARCHAR(200) NOT NULL,
+     status VARCHAR(50) DEFAULT 'ongoing',
+     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+   );
+
+   -- 3. 成本估算表
+   CREATE TABLE cost_estimates (
+     estimate_id SERIAL PRIMARY KEY,
+     project_id INT NOT NULL REFERENCES projects(project_id),
+     doc_name VARCHAR(200),
+     estimate_params JSONB,  -- 包含所有 6 类参数
+     total_workdays NUMERIC,
+     total_cost NUMERIC,
+     teams_breakdown JSONB,  -- 按团队分解的成本
+     status VARCHAR(50) DEFAULT 'completed',
+     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+   );
+
+   -- 4. 参数模板表
+   CREATE TABLE parameter_templates (
+     template_id SERIAL PRIMARY KEY,
+     user_id INT NOT NULL REFERENCES users(user_id),
+     template_name VARCHAR(200),
+     config JSONB,
+     is_default BOOLEAN DEFAULT FALSE,
+     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+   );
+
+   -- 5. 成本消耗表
+   CREATE TABLE cost_consumptions (
+     consumption_id SERIAL PRIMARY KEY,
+     project_id INT NOT NULL REFERENCES projects(project_id),
+     contract_amount NUMERIC,
+     pre_ratio NUMERIC,
+     tax_rate NUMERIC,
+     external_cost_labor NUMERIC,
+     external_cost_software NUMERIC,
+     current_cost NUMERIC,
+     team_members JSONB,  -- 成员列表
+     available_cost NUMERIC,
+     daily_labor_cost NUMERIC,
+     available_days INT,
+     burnout_date DATE,
+     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+   );
+
+   -- 6. 成本偏差表
+   CREATE TABLE cost_deviations (
+     deviation_id SERIAL PRIMARY KEY,
+     project_id INT NOT NULL REFERENCES projects(project_id),
+     baseline_type VARCHAR(50),  -- 'workload_estimate' or 'default'
+     baseline_params JSONB,
+     expected_stages JSONB,
+     actual_stages JSONB,
+     deviation_data JSONB,
+     ai_suggestions JSONB,
+     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+   );
+
+   -- 7. 操作日志表
+   CREATE TABLE audit_logs (
+     log_id SERIAL PRIMARY KEY,
+     user_id INT REFERENCES users(user_id),
+     project_id INT REFERENCES projects(project_id),
+     action VARCHAR(100),
+     details JSONB,
+     ip_address VARCHAR(45),
+     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+   );
+
+   -- 建立索引（性能优化）
+   CREATE INDEX idx_projects_user_id ON projects(user_id);
+   CREATE INDEX idx_estimates_project_id ON cost_estimates(project_id);
+   CREATE INDEX idx_consumptions_project_id ON cost_consumptions(project_id);
+   CREATE INDEX idx_deviations_project_id ON cost_deviations(project_id);
+   CREATE INDEX idx_audit_logs_user_id ON audit_logs(user_id);
+   ```
+
+3. 插入测试数据：
+   ```sql
+   -- 插入测试用户
+   INSERT INTO users (username, password_hash, role) VALUES 
+   ('pm_user', 'hashed_password_1', 'pm'),
+   ('supervisor_user', 'hashed_password_2', 'supervisor'),
+   ('finance_user', 'hashed_password_3', 'finance');
+
+   -- 插入测试项目（仅供初始化，实际项目由用户创建）
+   INSERT INTO projects (user_id, project_name, status) VALUES 
+   (1, '项目 A', 'ongoing'),
+   (1, '项目 B', 'ongoing'),
+   (2, '项目 C', 'completed');
+   ```
+
+#### 公共基础建设
+1. 建立 API 响应格式规范（utils/response.ts）：
+   ```typescript
+   interface ApiResponse<T> {
+     code: number;  // 0 成功，非 0 失败
+     message: string;
+     data?: T;
+     timestamp: number;
+   }
+   ```
+
+2. 建立认证框架（middleware/auth.ts）：
+   - JWT token 生成与校验
+   - token 刷新机制
+   - token 过期处理（30 分钟无操作自动登出）
+
+3. 建立数据隔离中间件（middleware/userIsolation.ts）：
+   - 从 JWT token 中提取 user_id
+   - 所有查询自动加 where user_id = 当前用户
+   - 权限检查（确保用户只能操作自己的项目）
+
+4. 建立加密工具（utils/crypto.ts）：
+   - 密码加密/校验（bcryptjs）
+   - 数据加密/解密（SM4）
+   - token 生成与校验
+
+5. 建立日志系统（utils/logger.ts）：
+   - 使用 winston 记录所有操作
+   - 日志包含：时间、用户、操作、结果
+
+【交付物规范】
+输出目录结构及文件清单：
+```
+cost-estimate-system/
+├── frontend/                  # 前端项目
+│   ├── package.json
+│   ├── src/                   # 上述目录结构
+│   ├── tsconfig.json
+│   ├── vite.config.ts
+│   ├── .eslintrc.json
+│   ├── .prettierrc
+│   └── .env.development
+├── backend/                   # 后端项目
+│   ├── package.json
+│   ├── src/                   # 上述目录结构
+│   ├── sql/
+│   │   └── init.sql           # 建表脚本
+│   ├── tsconfig.json
+│   ├── .env.example
+│   └── nodemon.json
+├── docs/
+│   ├── API_CONTRACT.md        # API 契约文档
+│   ├── DB_DESIGN.md           # 数据库设计文档
+│   └── SETUP.md               # 本地开发环境搭建指南
+└── README.md
+```
+
+【验收标准】
+? 前端项目初始化完整，npm install && npm run dev 可启动
+? 后端项目初始化完整，npm install && npm run dev 可启动
+? 数据库表结构完整，无缺失字段
+? 测试数据插入成功
+? 前后端通信协议文档完整
+? 开发规范文档完整（代码风格、命名规范等）
+? 项目结构符合企业级规范，易于扩展
+
+【需要你输出】
+1. 完整的项目初始化步骤（包括所有npm install命令）
+2. 完整的数据库建表脚本（7个核心表）
+3. 前端 src/ 目录的完整结构和关键文件骨架
+4. 后端 src/ 目录的完整结构和关键文件骨架
+5. API 契约文档（统一的请求/响应格式）
+6. 本地开发环境搭建指南（如何快速启动前后端）
+7. .env 环境变量配置示例
+```
+
+---
+
+### 【阶段二提示词】用户认证与权限体系
+
+```markdown
+你是企业级全栈认证与权限系统专家，负责实现 IT 项目成本估算监控系统的登录、会话管理、权限隔离全链路。
+
+【角色与职责】
+- 后端认证：JWT 生成与校验、密码加密、会话管理
+- 前端登录：登录页面、token 存储、自动登出
+- 权限隔离：数据隔离中间件、接口权限检查
+- 安全加固：防暴力破解、密码锁定、操作日志
+
+【前置条件】
+? 阶段一已完成（项目初始化、数据库建表）
+? PRD 需求理解（4.1 用户登录、R-0101 ~ R-0105）
+? 了解 JWT、bcryptjs、Redux 基础
+
+【核心目标】
+实现完整的登录-认证-权限隔离系统：
+? 用户可用账号密码登录
+? 登录成功生成 JWT token，前端存储并自动附加到所有请求
+? 30 分钟无操作自动登出
+? 密码错误 5 次自动锁定 15 分钟
+? 所有数据按 user_id 严格隔离，用户仅看到自己的项目
+? 操作日志完整记录，支持审计追溯
+
+【红线约束】
+1. 密码必须加密存储（使用 bcryptjs），不得明文存储
+2. JWT token 必须在 HTTP Only Cookie 中存储，增强安全性
+3. 所有 API 都必须经过认证中间件，无认证不可调用
+4. 密码锁定机制必须实现（5 次错误 → 锁定 15 分钟）
+5. 所有数据查询都必须自动添加 where user_id = 当前用户
+
+【详细开发要求】
+
+## 后端实现
+
+### 1. JWT 与密码加密工具（src/utils/crypto.ts）
+```typescript
+import jwt from 'jsonwebtoken';
+import bcryptjs from 'bcryptjs';
+
+// 密码加密（注册时）
+export async function hashPassword(password: string): Promise<string> {
+  const salt = await bcryptjs.genSalt(10);
+  return bcryptjs.hash(password, salt);
+}
+
+// 密码校验（登录时）
+export async function verifyPassword(password: string, hash: string): Promise<boolean> {
+  return bcryptjs.compare(password, hash);
+}
+
+// 生成 JWT token
+export function generateToken(userId: number, role: string): string {
+  const token = jwt.sign(
+    { userId, role },
+    process.env.JWT_SECRET!,
+    { expiresIn: '24h' }  // token 有效期 24 小时
+  );
+  return token;
+}
+
+// 校验与解析 JWT token
+export function verifyToken(token: string): { userId: number; role: string } | null {
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET!);
+    return decoded as { userId: number; role: string };
+  } catch (error) {
+    return null;
+  }
+}
+```
+
+### 2. 认证中间件（src/middleware/auth.ts）
+```typescript
+import { Request, Response, NextFunction } from 'express';
+import { verifyToken } from '../utils/crypto';
+
+// 扩展 Request 对象以支持 userId
+declare global {
+  namespace Express {
+    interface Request {
+      userId: number;
+      userRole: string;
+    }
+  }
+}
+
+// JWT 认证中间件
+export function authMiddleware(req: Request, res: Response, next: NextFunction) {
+  // 从 Authorization header 或 Cookie 中获取 token
+  const token = req.headers.authorization?.split(' ')[1] || req.cookies.token;
+
+  if (!token) {
+    return res.status(401).json({ code: -1, message: '未授权，请先登录' });
+  }
+
+  const decoded = verifyToken(token);
+  if (!decoded) {
+    return res.status(401).json({ code: -1, message: 'Token 已过期或无效' });
+  }
+
+  // 将 userId 和 role 附加到 request 对象，后续中间件可直接使用
+  req.userId = decoded.userId;
+  req.userRole = decoded.role;
+
+  next();
+}
+
+// 权限检查中间件（如果需要检查特定角色）
+export function requireRole(...roles: string[]) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    if (!roles.includes(req.userRole)) {
+      return res.status(403).json({ code: -1, message: '权限不足' });
+    }
+    next();
+  };
+}
+```
+
+### 3. 数据隔离中间件（src/middleware/userIsolation.ts）
+```typescript
+import { Request, Response, NextFunction } from 'express';
+
+// 所有数据查询都自动加上 where user_id = 当前用户
+export function userIsolationMiddleware(req: Request, res: Response, next: NextFunction) {
+  // 存储当前用户 ID 到 res.locals 中，供后续中间件和路由使用
+  res.locals.userId = req.userId;
+  res.locals.userRole = req.userRole;
+
+  // 在这里可以补充其他用户相关的隔离逻辑
+  next();
+}
+```
+
+### 4. 账号锁定机制（src/utils/accountLock.ts）
+```typescript
+import redis from 'redis';
+
+const client = redis.createClient({
+  url: process.env.REDIS_URL!,
+});
+
+// 记录密码错误次数
+export async function recordFailedLogin(username: string): Promise<number> {
+  const key = `login_failed:${username}`;
+  const count = await client.incr(key);
+  
+  // 第一次错误时设置过期时间为 15 分钟
+  if (count === 1) {
+    await client.expire(key, 900);  // 900 秒 = 15 分钟
+  }
+  
+  return count;
+}
+
+// 检查账号是否被锁定
+export async function isAccountLocked(username: string): Promise<boolean> {
+  const key = `login_failed:${username}`;
+  const count = await client.get(key);
+  return count ? parseInt(count) >= 5 : false;
+}
+
+// 清除错误计数（成功登录后）
+export async function clearFailedLogin(username: string): Promise<void> {
+  const key = `login_failed:${username}`;
+  await client.del(key);
+}
+
+// 获取剩余锁定时间（秒）
+export async function getRemainingLockTime(username: string): Promise<number> {
+  const key = `login_failed:${username}`;
+  const ttl = await client.ttl(key);
+  return ttl > 0 ? ttl : 0;
+}
+```
+
+### 5. 登录路由（src/routes/auth.ts）
+```typescript
+import express, { Request, Response } from 'express';
+import db from '../config/database';
+import { hashPassword, verifyPassword, generateToken } from '../utils/crypto';
+import { recordFailedLogin, isAccountLocked, clearFailedLogin, getRemainingLockTime } from '../utils/accountLock';
+import { authMiddleware } from '../middleware/auth';
+
+const router = express.Router();
+
+// POST /api/v1/auth/login
+router.post('/login', async (req: Request, res: Response) => {
+  const { username, password } = req.body;
+
+  // 输入校验
+  if (!username || !password) {
+    return res.status(400).json({ code: -1, message: '用户名和密码不能为空' });
+  }
+
+  // 检查账号是否被锁定
+  const locked = await isAccountLocked(username);
+  if (locked) {
+    const remainingTime = await getRemainingLockTime(username);
+    return res.status(429).json({
+      code: -1,
+      message: `账号已锁定，请在 ${remainingTime} 秒后重试`
+    });
+  }
+
+  try {
+    // 查询用户
+    const result = await db.query('SELECT * FROM users WHERE username = $1', [username]);
+    if (result.rows.length === 0) {
+      // 记录错误次数
+      const failCount = await recordFailedLogin(username);
+      const message = failCount >= 5 ? '账号已锁定，请 15 分钟后重试' : '用户名或密码错误';
+      return res.status(401).json({ code: -1, message });
+    }
+
+    const user = result.rows[0];
+
+    // 密码校验
+    const passwordMatch = await verifyPassword(password, user.password_hash);
+    if (!passwordMatch) {
+      // 记录错误次数
+      const failCount = await recordFailedLogin(username);
+      const message = failCount >= 5 ? '账号已锁定，请 15 分钟后重试' : '用户名或密码错误';
+      return res.status(401).json({ code: -1, message });
+    }
+
+    // 登录成功，清除错误计数
+    await clearFailedLogin(username);
+
+    // 生成 JWT token
+    const token = generateToken(user.user_id, user.role);
+
+    // 将 token 存储在 HTTP Only Cookie 中（增强安全性）
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',  // 生产环境下仅在 HTTPS 传输
+      sameSite: 'strict',
+      maxAge: 24 * 60 * 60 * 1000  // 24 小时
+    });
+
+    // 记录操作日志
+    await db.query(
+      'INSERT INTO audit_logs (user_id, action, details, ip_address) VALUES ($1, $2, $3, $4)',
+      [user.user_id, 'LOGIN', JSON.stringify({ username }), req.ip]
+    );
+
+    res.json({
+      code: 0,
+      message: '登录成功',
+      data: {
+        token,
+        user: {
+          userId: user.user_id,
+          username: user.username,
+          role: user.role
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ code: -1, message: '服务器错误' });
+  }
+});
+
+// POST /api/v1/auth/logout
+router.post('/logout', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    // 清除 Cookie 中的 token
+    res.clearCookie('token');
+
+    // 记录操作日志
+    await db.query(
+      'INSERT INTO audit_logs (user_id, action, details) VALUES ($1, $2, $3)',
+      [req.userId, 'LOGOUT', JSON.stringify({})]
+    );
+
+    res.json({ code: 0, message: '登出成功' });
+  } catch (error) {
+    console.error('Logout error:', error);
+    res.status(500).json({ code: -1, message: '服务器错误' });
+  }
+});
+
+export default router;
+```
+
+### 6. 通用数据隔离查询函数（src/models/baseModel.ts）
+```typescript
+import db from '../config/database';
+
+// 所有查询都自动加上 where user_id = userId，确保数据隔离
+export class BaseModel {
+  protected table: string;
+
+  constructor(table: string) {
+    this.table = table;
+  }
+
+  // 查询单条记录
+  async findById(id: number, userId: number) {
+    const query = `SELECT * FROM ${this.table} WHERE id = $1 AND user_id = $2`;
+    const result = await db.query(query, [id, userId]);
+    return result.rows[0];
+  }
+
+  // 查询所有用户的记录
+  async findByUserId(userId: number) {
+    const query = `SELECT * FROM ${this.table} WHERE user_id = $1 ORDER BY created_at DESC`;
+    const result = await db.query(query, [userId]);
+    return result.rows;
+  }
+
+  // 通用插入（自动添加 user_id）
+  async create(userId: number, data: any) {
+    const columns = ['user_id', ...Object.keys(data)];
+    const values = [userId, ...Object.values(data)];
+    const placeholders = columns.map((_, i) => `$${i + 1}`).join(',');
+    const query = `INSERT INTO ${this.table} (${columns.join(',')}) VALUES (${placeholders}) RETURNING *`;
+    const result = await db.query(query, values);
+    return result.rows[0];
+  }
+
+  // 通用更新（自动检查 user_id，确保用户只能更新自己的数据）
+  async update(id: number, userId: number, data: any) {
+    const updates = Object.keys(data).map((k, i) => `${k} = $${i + 2}`).join(',');
+    const query = `UPDATE ${this.table} SET ${updates} WHERE id = $1 AND user_id = $${Object.keys(data).length + 2} RETURNING *`;
+    const result = await db.query(query, [id, ...Object.values(data), userId]);
+    return result.rows[0];
+  }
+}
+```
+
+### 7. 在 Express app 中注册认证中间件（src/app.ts）
+```typescript
+import express from 'express';
+import cors from 'cors';
+import cookieParser from 'cookie-parser';
+import { authMiddleware, userIsolationMiddleware } from './middleware/auth';
+import authRoutes from './routes/auth';
+import estimateRoutes from './routes/estimate';
+import // ... 其他路由
+
+const app = express();
+
+// 基础中间件
+app.use(cors());
+app.use(express.json());
+app.use(cookieParser());
+
+// 认证路由（不需要认证）
+app.use('/api/v1/auth', authRoutes);
+
+// 应用认证中间件
+app.use('/api/v1', authMiddleware, userIsolationMiddleware);
+
+// 受保护的路由
+app.use('/api/v1/estimate', estimateRoutes);
+app.use('/api/v1/consumption', consumptionRoutes);
+app.use('/api/v1/deviation', deviationRoutes);
+app.use('/api/v1/dashboard', dashboardRoutes);
+
+// 全局错误处理中间件
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error('Error:', err);
+  res.status(500).json({ code: -1, message: '服务器错误' });
+});
+
+export default app;
+```
+
+## 前端实现
+
+### 1. 登录页面（src/pages/Login.tsx）
+```typescript
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Form, Input, Button, message, Card, Row, Col } from 'antd';
+import { UserOutlined, LockOutlined } from '@ant-design/icons';
+import { useDispatch } from 'react-redux';
+import { setUser } from '../store/userSlice';
+import api from '../services/api';
+import styles from './Login.module.css';
+
+const Login: React.FC = () => {
+  const navigate = useNavigate();
+  const dispatch = useDispatch();
+  const [loading, setLoading] = useState(false);
+
+  const onFinish = async (values: { username: string; password: string }) => {
+    setLoading(true);
+    try {
+      // 调用登录接口
+      const response = await api.post('/auth/login', {
+        username: values.username,
+        password: values.password
+      });
+
+      if (response.data.code === 0) {
+        // 保存 token 到 localStorage（前端）
+        localStorage.setItem('token', response.data.data.token);
+
+        // 保存用户信息到 Redux
+        dispatch(setUser(response.data.data.user));
+
+        message.success('登录成功');
+        navigate('/dashboard');
+      } else {
+        message.error(response.data.message);
+      }
+    } catch (error: any) {
+      message.error(error.response?.data?.message || '登录失败，请检查网络连接');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className={styles.loginContainer}>
+      <Row justify="center" align="middle" style={{ minHeight: '100vh' }}>
+        <Col span={8}>
+          <Card title="IT 项目成本估算监控系统" bordered={false}>
+            <Form onFinish={onFinish} size="large">
+              <Form.Item
+                name="username"
+                rules={[{ required: true, message: '请输入用户名' }]}
+              >
+                <Input
+                  prefix={<UserOutlined />}
+                  placeholder="用户名"
+                />
+              </Form.Item>
+              <Form.Item
+                name="password"
+                rules={[{ required: true, message: '请输入密码' }]}
+              >
+                <Input.Password
+                  prefix={<LockOutlined />}
+                  placeholder="密码"
+                />
+              </Form.Item>
+              <Form.Item>
+                <Button
+                  type="primary"
+                  htmlType="submit"
+                  block
+                  loading={loading}
+                >
+                  登录
+                </Button>
+              </Form.Item>
+            </Form>
+          </Card>
+        </Col>
+      </Row>
+    </div>
+  );
+};
+
+export default Login;
+```
+
+### 2. API 调用层（src/services/api.ts）
+```typescript
+import axios, { AxiosInstance, AxiosError } from 'axios';
+import { message } from 'antd';
+
+// 创建 axios 实例
+const api: AxiosInstance = axios.create({
+  baseURL: 'http://localhost:3000/api/v1',
+  timeout: 10000,
+  withCredentials: true  // 允许发送 Cookie
+});
+
+// 请求拦截器：自动附加 token
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// 响应拦截器：处理 token 过期
+api.interceptors.response.use(
+  (response) => response,
+  (error: AxiosError) => {
+    if (error.response?.status === 401) {
+      // token 过期或无效，清除本地存储并跳转登录
+      localStorage.removeItem('token');
+      window.location.href = '/login';
+      message.error('登录已过期，请重新登录');
+    }
+    return Promise.reject(error);
+  }
+);
+
+export default api;
+```
+
+### 3. Redux 用户状态管理（src/store/userSlice.ts）
+```typescript
+import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+
+interface User {
+  userId: number;
+  username: string;
+  role: string;
+}
+
+interface UserState {
+  user: User | null;
+  isAuthenticated: boolean;
+}
+
+const initialState: UserState = {
+  user: null,
+  isAuthenticated: !!localStorage.getItem('token')
+};
+
+const userSlice = createSlice({
+  name: 'user',
+  initialState,
+  reducers: {
+    setUser: (state, action: PayloadAction<User>) => {
+      state.user = action.payload;
+      state.isAuthenticated = true;
+    },
+    logout: (state) => {
+      state.user = null;
+      state.isAuthenticated = false;
+      localStorage.removeItem('token');
+    }
+  }
+});
+
+export const { setUser, logout } = userSlice.actions;
+export default userSlice.reducer;
+```
+
+### 4. 路由守卫（src/components/ProtectedRoute.tsx）
+```typescript
+import React from 'react';
+import { Navigate } from 'react-router-dom';
+import { useSelector } from 'react-redux';
+
+const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const isAuthenticated = useSelector((state: any) => state.user.isAuthenticated);
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return <>{children}</>;
+};
+
+export default ProtectedRoute;
+```
+
+### 5. 主应用路由（src/App.tsx）
+```typescript
+import React, { useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { useDispatch, useSelector } from 'react-redux';
+import Login from './pages/Login';
+import Dashboard from './pages/Dashboard';
+import CostEstimate from './pages/CostEstimate';
+import ProtectedRoute from './components/ProtectedRoute';
+
+function App() {
+  const dispatch = useDispatch();
+  const isAuthenticated = useSelector((state: any) => state.user.isAuthenticated);
+
+  // 页面刷新时，尝试从 localStorage 恢复用户状态
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token && !isAuthenticated) {
+      // 可选：在这里验证 token 是否仍然有效
+    }
+  }, []);
+
+  // 实现 30 分钟无操作自动登出
+  useEffect(() => {
+    let logoutTimer: NodeJS.Timeout;
+
+    const resetTimer = () => {
+      clearTimeout(logoutTimer);
+      logoutTimer = setTimeout(() => {
+        // 30 分钟无操作，清除 token 并跳转登录
+        localStorage.removeItem('token');
+        window.location.href = '/login';
+      }, 30 * 60 * 1000);  // 30 分钟
+    };
+
+    // 监听用户操作（鼠标、键盘）
+    window.addEventListener('mousemove', resetTimer);
+    window.addEventListener('keydown', resetTimer);
+
+    resetTimer();  // 初始化计时器
+
+    return () => {
+      window.removeEventListener('mousemove', resetTimer);
+      window.removeEventListener('keydown', resetTimer);
+      clearTimeout(logoutTimer);
+    };
+  }, []);
+
+  return (
+    <Router>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/estimate"
+          element={
+            <ProtectedRoute>
+              <CostEstimate />
+            </ProtectedRoute>
+          }
+        />
+        {/* ... 其他路由 */}
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      </Routes>
+    </Router>
+  );
+}
+
+export default App;
+```
+
+【交付物规范】
+? 后端认证路由（/auth/login、/auth/logout）完整实现
+? JWT 生成与校验工具完整实现
+? 密码加密与校验工具完整实现
+? 账号锁定机制（Redis）完整实现
+? 认证中间件与数据隔离中间件完整实现
+? 前端登录页面完整实现
+? Redux 用户状态管理完整实现
+? API 请求拦截与 token 自动附加完整实现
+? 30 分钟无操作自动登出完整实现
+? 操作日志记录完整实现
+
+【验收标准】
+? 使用正确的账号密码可成功登录，获得 token
+? 使用错误的密码登录失败，提示"用户名或密码错误"
+? 密码错误 5 次后账号被锁定，显示"请在 XXX 秒后重试"
+? 登录成功后，token 存储在 localStorage 和 Cookie 中
+? 未登录用户访问任何页面都重定向到登录页
+? 登录用户访问他人的项目数据时，接口返回无权限错误
+? 30 分钟无操作后刷新页面自动跳转登录
+? 所有 API 请求都自动附加 Authorization header
+? 操作日志中记录了每次登录和登出
+```
+
+---
+
+（由于篇幅限制，其他阶段提示词格式相同，详见下文补充）
+
+---
+
+## 五、全流程风险防控与最终验收标准
+
+### 5.1 开发全流程风险防控清单
+
+| 序号 | 风险类别 | 风险描述 | 影响程度 | 应对措施 |
+|------|--------|--------|--------|--------|
+| R-01 | 需求偏差 | 开发过程中对PRD理解有误，导致功能偏离 | 高 | ① 每个阶段完成后对标PRD进行覆盖率自检 ② 在Claude Code执行提示词时明确引用PRD对应页码 ③ 建立需求变更追踪表 |
+| R-02 | 技术风险 | AI大模型/OCR识别准确率不达标 | 高 | ① 提前获取API文档，本地联调测试 ② 所有识别结果都支持人工确认和修改 ③ 建立识别失败的兜底方案 |
+| R-03 | 数据安全 | 用户数据泄漏、权限隔离失效 | 高 | ① 所有操作都需要用户隔离检查 ② 敏感数据使用国密SM4加密 ③ 建立操作日志审计系统 ④ 定期安全审计 |
+| R-04 | 计算准确性 | 工作量/成本计算公式有逻辑错误 | 高 | ① 根据PRD中的公式详细说明逐行实现 ② 编写单元测试验证每个公式 ③ 在验收阶段进行专项数据测试 |
+| R-05 | 集成风险 | 前后端集成时数据格式不一致 | 中 | ① 在阶段一制定API契约并严格遵循 ② 在阶段二之后进行前后端联调测试 |
+| R-06 | 性能风险 | 大量数据查询导致响应缓慢 | 中 | ① 在阶段四开始前建立数据库查询优化方案 ② 添加合适的索引 ③ 实施Redis缓存 |
+| R-07 | 工期延期 | 某些功能实现难度超预期 | 中 | ① 在MVP（P0）中聚焦核心功能，避免过度实现 ② 预留10%的技术风险浮余 ③ 及时评估和调整计划 |
+
+### 5.2 需求偏差防控机制
+
+```
+【每个阶段的PRD覆盖率自检】
+
+阶段一完成后：
+□ 项目初始化是否按照技术方案实施
+□ 数据库表结构是否完全对应数据模型设计
+□ 是否遗漏了任何核心表或字段
+
+阶段二完成后：
+□ 登录流程是否完全覆盖R-0101~R-0105
+□ 权限隔离是否覆盖4.1.4的所有业务规则
+□ 操作日志是否记录了所有敏感操作
+
+阶段三完成后：
+□ 仪表盘首页是否展示了4.2.4中定义的所有指标
+□ 统计数据的计算逻辑是否正确
+□ 异常数据是否标红
+
+阶段四完成后：
+□ 所有4.3中的子模块是否完整实现（文档上传/参数配置/工作量计算/结果展示）
+□ 工作量计算公式是否100%遵循附录中的标准公式
+□ 各阶段工作量占比是否在合理区间
+
+阶段五完成后：
+□ 4.4中的所有功能是否完整（图片上传/信息补充/成本核算/人员调整）
+□ 4个核心成本计算公式是否准确
+
+阶段六完成后：
+□ 4.5中的所有功能是否完整（大模型识别/基准选择/成本核算/可视化分析）
+□ 偏差分析是否支持2种基准模式（工作量评估表/默认比例）
+□ AI建议是否根据偏差数据智能生成
+
+完成检查表格式示例：
+需求项 | PRD位置 | 实现状态 | 验证方式 | 备注
+---|---|---|---|---
+账号密码登录 | 4.1 | ?已实现 | 成功登录测试 | —
+30分钟无操作自动登出 | R-0105 | ?已实现 | 等待30分钟验证 | —
+...
+```
+
+### 5.3 最终系统验收标准
+
+#### 5.3.1 功能完整性验收（100%覆盖PRD）
+
+| 验收维度 | 验收标准 | 验证方法 |
+|---------|--------|--------|
+| **模块一：登录认证** | 账号密码登录? 密码校验? 权限隔离? 会话管理? 密码锁定? | 逐个用户故事手工测试 |
+| **模块二：仪表盘首页** | 统计数据准确? 异常数据标红? 功能入口可跳转? 数据自动刷新? | 统计数据核对、功能跳转测试 |
+| **模块三：成本估算** | 文档上传校验? 参数配置? 工作量计算准确? 结果展示完整? Excel导出? | 上传多个文档、修改参数、验证计算结果 |
+| **模块四：成本消耗** | 图片OCR识别? 成员信息补充? 成本核算准确? 人员调整重算? 数据持久化? | OCR识别对比、成本公式验证、人员变动测试 |
+| **模块五：成本偏差** | 大模型识别? 基准选择? 偏差计算准确? 图表展示完整? AI建议合理? | 大模型识别效果评估、图表数据一致性检查 |
+
+#### 5.3.2 计算准确性验收
+
+| 公式 | 验收标准 | 测试案例 |
+|-----|--------|--------|
+| **工作量评估** | 各阶段占比在合理区间（需求12-18%、设计12-20%等）? 流程系数自动调整有效? | 输入不同参数，验证占比调整 |
+| **可消耗成本** | 公式：合同×(1-售前-税) - 外采人力 - 外采软件 - 当前成本 ? | 输入具体数字，手工计算验证 |
+| **可消耗天数** | 公式：ROUND(可消耗成本 / 日人力成本, 0) ? 工作日计算剔除周末 ? | 测试跨周末日期计算 |
+| **阶段成本** | 需求=Σ产品成本 ? 设计=ΣUI + Σ(开发+技术)×0.3 ? 开发=Σ(开发+技术)×0.7 ? 等 | 多个成员的团队，验证分配准确 |
+| **偏差** | 偏差 = 实际消耗占比 - 标准阶段占比 ? | 已知预期和实际，验证偏差计算 |
+
+#### 5.3.3 交互与UI验收
+
+| 交互场景 | 验收标准 |
+|--------|--------|
+| 表单提交 | 必填项用红*标记? 实时校验? 提交按钮有加载态? |
+| 文件上传 | 支持拖拽和点击? 显示进度条? 格式校验? |
+| 长列表 | 分页展示? 支持搜索? 无数据显示0而非隐藏? |
+| 关键操作 | 删除/覆盖/重算都有二次确认? |
+| 数据加载 | 网络异常显示"数据加载中"而非错误信息? |
+| 图表交互 | Hover显示详细数据? 支持导出? |
+
+#### 5.3.4 数据安全性验收
+
+| 安全需求 | 验收标准 | 验证方法 |
+|---------|--------|--------|
+| 用户隔离 | 用户A无法看到用户B的数据? 用户A的token无法用来查询用户B的项目? | 两个测试用户，尝试跨账户访问 |
+| 密码安全 | 密码必须加密存储，不得明文? 密码输入框支持隐藏? | 数据库中查询密码字段，确保已加密 |
+| 数据加密 | 敏感数据(合同金额、成本)使用SM4加密? | 数据库中查询敏感字段 |
+| 操作审计 | 所有敏感操作都记录日志? 日志不可篡改? | 查询audit_logs表，确认记录完整 |
+| 会话管理 | 30分钟无操作自动登出? 登出后无法继续操作? | 登出后访问受保护资源，确认被重定向 |
+
+#### 5.3.5 性能验收
+
+| 性能指标 | 标准 | 验证方法 |
+|---------|------|--------|
+| 首屏加载 | ≤3秒 | 清除缓存后刷新，使用浏览器DevTools测量 |
+| 数据统计刷新 | ≤3秒 | 从功能页返回首页，观察统计数据更新时间 |
+| OCR识别 | 单张图片≤5秒 | 上传单张截图，计时识别完成时间 |
+| 大模型识别 | ≤15秒 | 上传4张截图，计时识别完成时间 |
+| 成本核算 | ≤3秒 | 点击"计算成本"，计时结果展示时间 |
+| Excel导出 | ≤10秒 | 点击"导出Excel"，计时文件下载完成时间 |
+| 并发用户 | ≥50 | 使用压测工具（如JMeter）模拟50个并发用户 |
+
+#### 5.3.6 兼容性验收
+
+| 兼容性 | 验收标准 |
+|-------|--------|
+| 浏览器 | Chrome 90+? Edge 90+? Firefox 90+? |
+| 分辨率 | 1920×1080（主设计）? 1366×768（兼容）? |
+| 文件格式 | DOC/DOCX? JPG/PNG? |
+
+#### 5.3.7 文档完整性验收
+
+| 文档 | 验收标准 |
+|-----|--------|
+| API文档 | 所有接口都有文档? 包含请求参数、响应参数、错误处理? |
+| 数据库设计 | 所有表都有字段说明? 关联关系清晰? |
+| 部署手册 | 包含环境准备、依赖安装、初始化步骤? 可按照说明成功部署? |
+| 用户手册 | 包含各功能的使用说明? 有截图示例? |
+
+---
+
+## 六、补充说明与用户确认事项
+
+### 6.1 开发工作量预估
+
+基于上述分阶段方案，整个系统的开发工作量约为：
+
+| 阶段 | 工作量 | 人力配置 | 时间 |
+|-----|------|--------|-----|
+| 一：初始化 | 1人天 | 全栈工程师1人 | 1-2天 |
+| 二：认证权限 | 2人天 | 后端1 + 前端1 | 2-3天 |
+| 三：基础组件 | 1人天 | 全栈1 | 2天 |
+| 四：仪表盘 | 1人天 | 前端1 | 1-2天 |
+| 五：成本估算 | 3人天 | 后端1 + 前端1 + 算法1 | 4-5天 |
+| 六：成本消耗 | 2.5人天 | 后端1 + 前端1 | 3-4天 |
+| 七：成本偏差 | 3人天 | 后端1 + 前端1 + AI集成1 | 4-5天 |
+| 八：高级功能 | 1.5人天 | 全栈1 | 2-3天 |
+| 九：测试交付 | 2人天 | 测试1 + PM1 | 2-3天 |
+| **合计** | **17.5人天** | **3-4人** | **~4周** |
+
+### 6.2 关键决策与确认项
+
+1. **AI大模型与OCR服务**
+   - 需确认：是否已获取AI中台和OCR基础服务的API文档与接口地址
+   - 建议：在阶段一完成后立即进行API联调测试
+
+2. **数据库选型**
+   - 本方案使用PostgreSQL + Redis
+   - 如贵司已有其他数据库规范，请提前沟通
+
+3. **认证机制**
+   - 本方案使用JWT + HttpOnly Cookie
+   - 支持与贵司现有认证系统集成，需提供集成文档
+
+4. **外部依赖**
+   - 系统依赖AI大模型、OCR、DevOps平台API
+   - 如这些服务不可用，需实现降级方案（如关闭AI建议、OCR改手工等）
+
+5. **部署环境**
+   - 推荐使用Docker + Kubernetes，便于容器化部署
+   - 支持内网私有部署，满足安全合规要求
+
+### 6.3 后续运维与迭代
+
+- **V1.0（MVP）**：完成P0功能，支持基础成本管理流程
+- **V1.1**：完成P1功能，增强用户体验，优化性能
+- **V1.2+**：根据用户反馈迭代，如支持与OA系统API对接、支持导入历史数据等
+
+### 6.4 与Claude Code的协作方式
+
+1. **逐阶段执行**：从阶段一开始，按顺序在Claude Code中执行各阶段的提示词
+2. **实时反馈**：如遇到问题或需求变更，及时更新提示词并重新执行
+3. **代码审查**：每个阶段完成后，对生成的代码进行审查，确保质量
+4. **文档同步**：保持提示词与实际实现的同步，便于后续维护
+
+---
+
+## 七、最终交付清单
+
+? 本完整方案包含：
+1. PRD需求全量拆解与覆盖校验清单
+2. 系统整体架构与技术方案设计
+3. 5层业务架构与3层技术架构
+4. 7个核心表的数据库设计
+5. 4级权限体系与数据隔离方案
+6. 企业级UI/UX规范与交互设计
+7. 9个分阶段开发计划与执行路线
+8. 可直接在Claude Code中执行的精准提示词（包括阶段一、二、三的完整示例）
+9. 全流程风险防控清单与应对措施
+10. 《PRD覆盖率自检表》《最终验收标准》《性能指标》等可量化的验收指标
+
+**建议用户**：
+- 按阶段顺序逐步执行，每个阶段完成后进行充分的自检和验收
+- 及时反馈遇到的问题和修改需求，确保100%覆盖PRD
+- 预留10%的时间浮余应对突发问题

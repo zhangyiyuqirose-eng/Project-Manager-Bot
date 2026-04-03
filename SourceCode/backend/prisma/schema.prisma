@@ -1,0 +1,217 @@
+// Prisma Schema for IT项目成本估算监控系统
+// 数据库: SQLite (开发环境)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ==================== 用户与权限相关表 ====================
+
+// 用户表
+model User {
+  id            Int       @id @default(autoincrement())
+  username      String    @unique
+  passwordHash  String    @map("password_hash")
+  name          String
+  email         String?
+  role          String    @default("pm") // pm, supervisor, department_head, finance
+  status        String    @default("active") // active, locked, disabled
+  loginErrorCount Int     @default(0) @map("login_error_count")
+  lockEndTime   DateTime? @map("lock_end_time")
+  lastLoginTime DateTime? @map("last_login_time")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  // 关联
+  projects      Project[]
+  operationLogs OperationLog[]
+  paramTemplates ParamTemplate[]
+
+  @@map("users")
+}
+
+// 操作日志表
+model OperationLog {
+  id            Int      @id @default(autoincrement())
+  userId        Int      @map("user_id")
+  operationType String   @map("operation_type")
+  operationContent String? @map("operation_content")
+  ipAddress     String?  @map("ip_address")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  // 关联
+  user          User     @relation(fields: [userId], references: [id])
+
+  @@map("operation_logs")
+}
+
+// 参数模板表
+model ParamTemplate {
+  id           Int      @id @default(autoincrement())
+  userId       Int      @map("user_id")
+  templateName String   @map("template_name")
+  configContent String  @map("config_content") // JSON格式存储配置
+  isDefault    Boolean  @default(false) @map("is_default")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  // 关联
+  user         User     @relation(fields: [userId], references: [id])
+
+  @@map("param_templates")
+}
+
+// ==================== 项目相关表 ====================
+
+// 项目主表
+model Project {
+  id              Int       @id @default(autoincrement())
+  userId          Int       @map("user_id")
+  projectName     String    @map("project_name")
+  projectType     String?   @map("project_type")
+  contractAmount  Float?    @map("contract_amount")
+  status          String    @default("ongoing") // ongoing, completed, paused, cancelled
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  // 关联
+  user            User          @relation(fields: [userId], references: [id])
+  documents       ProjectDocument[]
+  estimateConfigs EstimateConfig[]
+  estimateResults EstimateResult[]
+  members         ProjectMember[]
+  costs           ProjectCost[]
+  deviations      CostDeviation[]
+
+  @@map("projects")
+}
+
+// 项目文档表
+model ProjectDocument {
+  id          Int      @id @default(autoincrement())
+  projectId   Int      @map("project_id")
+  docName     String   @map("doc_name")
+  docPath     String?  @map("doc_path")
+  docType     String   @default("requirement") @map("doc_type")
+  parseStatus String   @default("pending") @map("parse_status") // pending, parsing, success, failed
+  parseResult String?  @map("parse_result") // JSON格式存储解析结果
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // 关联
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("project_documents")
+}
+
+// ==================== 实施成本预估相关表 ====================
+
+// 评估配置表
+model EstimateConfig {
+  id                  Int      @id @default(autoincrement())
+  projectId           Int      @map("project_id")
+  complexityConfig    String?  @map("complexity_config") // JSON
+  systemCoefficient   String?  @map("system_coefficient") // JSON
+  processCoefficient  String?  @map("process_coefficient") // JSON
+  techStackCoefficient String? @map("tech_stack_coefficient") // JSON
+  unitPriceConfig     String?  @map("unit_price_config") // JSON
+  managementCoefficient Float   @default(0.2) @map("management_coefficient")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  // 关联
+  project             Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("estimate_configs")
+}
+
+// 评估结果表
+model EstimateResult {
+  id                Int      @id @default(autoincrement())
+  projectId         Int      @map("project_id")
+  totalManDay       Float    @map("total_man_day")
+  totalCost         Float    @map("total_cost")
+  moduleCount       Int      @default(0) @map("module_count")
+  manMonth          Float    @map("man_month")
+  stageDetail       String?  @map("stage_detail") // JSON格式存储各阶段明细
+  teamDetail        String?  @map("team_detail") // JSON格式存储各团队明细
+  calcTrace         String?  @map("calc_trace") // JSON格式存储计算轨迹
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  // 关联
+  project           Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("estimate_results")
+}
+
+// ==================== 成本消耗预估相关表 ====================
+
+// 项目成员表
+model ProjectMember {
+  id            Int      @id @default(autoincrement())
+  projectId     Int      @map("project_id")
+  name          String
+  level         String   // P5, P6, P7, P8
+  dailyCost     Float    @map("daily_cost") // 日成本（万元）
+  role          String?  // 角色：产品、开发、测试等
+  entryTime     DateTime? @map("entry_time")
+  leaveTime     DateTime? @map("leave_time")
+  reportedHours Float?   @map("reported_hours") // 已报工时
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  // 关联
+  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("project_members")
+}
+
+// 项目成本表
+model ProjectCost {
+  id                  Int      @id @default(autoincrement())
+  projectId           Int      @map("project_id")
+  contractAmount      Float    @map("contract_amount") // 合同金额
+  preSaleRatio        Float    @default(0) @map("pre_sale_ratio") // 售前比例
+  taxRate             Float    @default(0.06) @map("tax_rate") // 税率
+  externalLaborCost   Float    @default(0) @map("external_labor_cost") // 外采人力成本
+  externalSoftwareCost Float   @default(0) @map("external_software_cost") // 外采软件成本
+  currentManpowerCost Float    @default(0) @map("current_manpower_cost") // 当前人力成本
+  availableCost       Float    @default(0) @map("available_cost") // 可消耗成本
+  dailyManpowerCost   Float    @default(0) @map("daily_manpower_cost") // 日人力成本
+  availableDays       Int      @default(0) @map("available_days") // 可消耗天数
+  burnoutDate         DateTime? @map("burnout_date") // 燃尽日期
+  calcTime            DateTime? @map("calc_time") // 计算时间
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  // 关联
+  project             Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("project_costs")
+}
+
+// ==================== 成本偏差监控相关表 ====================
+
+// 成本偏差表
+model CostDeviation {
+  id                    Int      @id @default(autoincrement())
+  projectId             Int      @map("project_id")
+  totalContractAmount   Float    @map("total_contract_amount") // 总合同金额
+  currentCostConsumption Float   @default(0) @map("current_cost_consumption") // 当前成本消耗
+  taskProgress          Float    @default(0) @map("task_progress") // 任务进度
+  costDeviation         Float    @default(0) @map("cost_deviation") // 成本偏差
+  baselineType          String   @default("default") @map("baseline_type") // default, custom
+  baselineConfig        String?  @map("baseline_config") // JSON格式存储基准配置
+  expectedStages        String?  @map("expected_stages") // JSON
+  actualStages          String?  @map("actual_stages") // JSON
+  teamCosts             String?  @map("team_costs") // JSON
+  aiSuggestion          String?  @map("ai_suggestion") // AI建议
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  // 关联
+  project               Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("cost_deviations")
+}
