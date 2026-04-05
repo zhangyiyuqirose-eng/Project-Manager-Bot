@@ -199,7 +199,7 @@ export default function CostDeviationResult() {
   }
 
   // 判断偏差状态
-  const getDeviationStatus = (deviation: number) => {
+  const getDeviationStatus = (deviation: number): { status: 'success' | 'warning' | 'error', text: string, color: string } => {
     if (deviation <= 5) {
       return { status: 'success', text: '正常', color: '#10B981' }
     } else if (deviation <= 15) {
