@@ -13,6 +13,7 @@ import {
   InboxOutlined,
   FileTextOutlined,
   SettingOutlined,
+  FileSearchOutlined,
   BarChartOutlined,
   CheckCircleOutlined,
   RocketOutlined,
@@ -25,7 +26,7 @@ import { estimateApi } from '@/api'
 const { Title, Text, Paragraph } = Typography
 const { Dragger } = Upload
 
-// 步骤条配置
+// 步骤条配置（4步）
 const stepItems = [
   {
     title: '文件上传',
@@ -36,6 +37,11 @@ const stepItems = [
     title: '参数配置',
     description: '配置计算参数',
     icon: <SettingOutlined />,
+  },
+  {
+    title: '文档解析结果',
+    description: '查看功能点详情',
+    icon: <FileSearchOutlined />,
   },
   {
     title: '结果展示',
@@ -113,11 +119,6 @@ export default function CostEstimateUpload() {
         onSuccess?.(response.data.data)
         message.success('文件上传成功')
         setCurrentStep(1)
-
-        // 延迟跳转到参数配置页
-        setTimeout(() => {
-          navigate(`/cost-estimate/config?projectId=${projectId}`)
-        }, 1000)
       } else {
         onError?.(new Error(response.data.message || '上传失败'))
       }
@@ -229,7 +230,7 @@ export default function CostEstimateUpload() {
         </Dragger>
 
         {/* 上传进度 */}
-        {uploading && (
+        {(uploading || (uploadProgress === 100 && uploadedProjectId)) && (
           <div style={{ marginTop: 24 }}>
             <Progress
               percent={uploadProgress}
@@ -239,7 +240,9 @@ export default function CostEstimateUpload() {
                 '100%': '#10B981',
               }}
             />
-            <Text type="secondary">正在上传文件，请稍候...</Text>
+            <Text type="secondary">
+              {uploadProgress === 100 ? '文件上传完成' : '正在上传文件，请稍候...'}
+            </Text>
           </div>
         )}
 
@@ -270,7 +273,7 @@ export default function CostEstimateUpload() {
               <div>
                 <Text strong style={{ fontSize: 16, color: '#10B981' }}>文档上传成功</Text>
                 <br />
-                <Text type="secondary">文件已成功上传，即将跳转到参数配置页面...</Text>
+                <Text type="secondary">文件已成功上传，请点击"下一步"按钮继续配置参数</Text>
               </div>
             </div>
           </Card>

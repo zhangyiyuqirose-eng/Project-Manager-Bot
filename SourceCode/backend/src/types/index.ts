@@ -150,6 +150,7 @@ export interface StageDetail {
   stage: string
   manDays: number
   percentage: number
+  cost: number
   description: string
 }
 

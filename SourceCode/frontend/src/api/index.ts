@@ -6,11 +6,69 @@ import { useUserStore } from '../store/userStore'
 // 创建axios实例
 const api: AxiosInstance = axios.create({
   baseURL: '/api',
-  timeout: 30000,
+  timeout: 30000, // 默认30秒，普通API调用
   headers: {
     'Content-Type': 'application/json',
   },
 })
+
+// AI操作专用实例，timeout更长
+const aiApi: AxiosInstance = axios.create({
+  baseURL: '/api',
+  timeout: 180000, // AI操作3分钟timeout
+  headers: {
+    'Content-Type': 'application/json',
+  },
+})
+
+// 为aiApi添加相同的拦截器
+aiApi.interceptors.request.use(
+  (config: InternalAxiosRequestConfig) => {
+    const token = useUserStore.getState().token
+    if (token && config.headers) {
+      config.headers.Authorization = `Bearer ${token}`
+    }
+    return config
+  },
+  (error) => Promise.reject(error)
+)
+
+aiApi.interceptors.response.use(
+  (response) => {
+    const { data } = response
+    if (data.code !== 0 && data.code !== 200) {
+      message.error(data.message || '请求失败')
+      return Promise.reject(new Error(data.message || '请求失败'))
+    }
+    return response
+  },
+  (error: AxiosError) => {
+    if (error.response) {
+      const { status, data } = error.response
+      switch (status) {
+        case 401:
+          message.error('接口未授权，请检查权限')
+          break
+        case 403:
+          message.error('权限不足，无法访问')
+          break
+        case 404:
+          message.error('请求的资源不存在')
+          break
+        case 500:
+          message.error('服务器错误，请稍后重试')
+          break
+        default:
+          message.error((data as any)?.message || '请求失败')
+      }
+    } else if (error.request) {
+      message.error('网络错误，请检查网络连接')
+    } else {
+      message.error(error.message || '请求失败')
+    }
+    return Promise.reject(error)
+  }
+)
 
 // 请求拦截器：自动附加token
 api.interceptors.request.use(
@@ -27,6 +85,11 @@ api.interceptors.request.use(
 // 响应拦截器：处理错误
 api.interceptors.response.use(
   (response) => {
+    // 如果是 blob 类型响应（如文件下载），直接返回
+    if (response.config.responseType === 'blob') {
+      return response
+    }
+
     const { data } = response
     // 业务逻辑错误
     if (data.code !== 0 && data.code !== 200) {
@@ -39,22 +102,34 @@ api.interceptors.response.use(
     if (error.response) {
       const { status, data } = error.response
 
-      switch (status) {
-        case 401:
-          // 未授权，仅显示提示，不跳转登录页
-          message.error('接口未授权，请检查权限')
-          break
-        case 403:
-          message.error('权限不足，无法访问')
-          break
-        case 404:
-          message.error('请求的资源不存在')
-          break
-        case 500:
-          message.error('服务器错误，请稍后重试')
-          break
-        default:
-          message.error((data as any)?.message || '请求失败')
+      // 如果是 blob 响应错误，尝试解析错误信息
+      if (data instanceof Blob) {
+        data.text().then(text => {
+          try {
+            const errorData = JSON.parse(text)
+            message.error(errorData.message || '请求失败')
+          } catch {
+            message.error('请求失败')
+          }
+        })
+      } else {
+        switch (status) {
+          case 401:
+            // 未授权，仅显示提示，不跳转登录页
+            message.error('接口未授权，请检查权限')
+            break
+          case 403:
+            message.error('权限不足，无法访问')
+            break
+          case 404:
+            message.error('请求的资源不存在')
+            break
+          case 500:
+            message.error('服务器错误，请稍后重试')
+            break
+          default:
+            message.error((data as any)?.message || '请求失败')
+        }
       }
     } else if (error.request) {
       message.error('网络错误，请检查网络连接')
@@ -131,8 +206,13 @@ export const estimateApi = {
     })
   },
 
+  // AI解析文档，使用更长的timeout
   parseDocument: (projectId: number) =>
-    api.post<ApiResponse<any>>(`/estimate/${projectId}/parse`),
+    aiApi.post<ApiResponse<any>>(`/estimate/${projectId}/parse`),
+
+  // 获取文档解析结果
+  getParseResult: (projectId: number) =>
+    api.get<ApiResponse<any>>(`/estimate/${projectId}/parse-result`),
 
   getDefaultConfig: () =>
     api.get<ApiResponse<any>>('/estimate/config/default'),
@@ -140,8 +220,9 @@ export const estimateApi = {
   saveConfig: (projectId: number, config: any) =>
     api.post<ApiResponse<any>>(`/estimate/${projectId}/config`, config),
 
+  // AI计算，使用更长的timeout
   calculate: (projectId: number) =>
-    api.post<ApiResponse<any>>(`/estimate/${projectId}/calculate`),
+    aiApi.post<ApiResponse<any>>(`/estimate/${projectId}/calculate`),
 
   getResult: (projectId: number) =>
     api.get<ApiResponse<any>>(`/estimate/${projectId}/result`),
@@ -184,8 +265,9 @@ export const deviationApi = {
     })
   },
 
+  // AI识别，使用更长的timeout
   aiRecognize: (projectId: number) =>
-    api.post<ApiResponse<any>>(`/deviation/${projectId}/recognize`),
+    aiApi.post<ApiResponse<any>>(`/deviation/${projectId}/recognize`),
 
   saveBaseline: (projectId: number, baseline: any) =>
     api.post<ApiResponse<any>>(`/deviation/${projectId}/baseline`, baseline),
@@ -193,8 +275,9 @@ export const deviationApi = {
   calculateDeviation: (projectId: number) =>
     api.post<ApiResponse<any>>(`/deviation/${projectId}/calculate`),
 
+  // AI建议，使用更长的timeout
   getAiSuggestion: (projectId: number) =>
-    api.get<ApiResponse<any>>(`/deviation/${projectId}/suggestion`),
+    aiApi.get<ApiResponse<any>>(`/deviation/${projectId}/suggestion`),
 
   getResult: (projectId: number) =>
     api.get<ApiResponse<any>>(`/deviation/${projectId}/result`),

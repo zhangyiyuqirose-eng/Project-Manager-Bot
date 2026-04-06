@@ -3,6 +3,7 @@ import Layout from './components/common/Layout'
 import Dashboard from './pages/Dashboard'
 import CostEstimateUpload from './pages/CostEstimate/Upload'
 import CostEstimateConfig from './pages/CostEstimate/Config'
+import CostEstimateParseResult from './pages/CostEstimate/ParseResult'
 import CostEstimateResult from './pages/CostEstimate/Result'
 import CostConsumptionInput from './pages/CostConsumption/Input'
 import CostConsumptionResult from './pages/CostConsumption/Result'
@@ -25,6 +26,7 @@ function App() {
         <Route path="cost-estimate">
           <Route path="upload" element={<CostEstimateUpload />} />
           <Route path="config" element={<CostEstimateConfig />} />
+          <Route path="parse-result" element={<CostEstimateParseResult />} />
           <Route path="result" element={<CostEstimateResult />} />
         </Route>
 

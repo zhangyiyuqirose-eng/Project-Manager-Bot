@@ -1,30 +1,31 @@
 import axios from 'axios'
 
 /**
- * AI大模型服务 - 阿里云百炼 Anthropic 格式 API
- * URL: https://coding.dashscope.aliyuncs.com/apps/anthropic
- * Model: glm-5
+ * AI大模型服务 - OpenAI 格式 API
+ * 参考 workload_assessment/server.py 的实现
+ * URL: https://www.finna.com.cn/v1/chat/completions
+ * Model: Qwen/Qwen3-Omni-30B-A3B-Thinking
  */
 
 interface AIMessage {
   role: 'system' | 'user' | 'assistant'
-  content: string | any[]
+  content: string
 }
 
 interface AIResponse {
   id: string
   model: string
-  role: string
-  type: string
-  content: {
-    type: string
-    text?: string
-    thinking?: string
+  choices: {
+    message: {
+      role: string
+      content: string
+    }
+    finish_reason: string
   }[]
-  stop_reason: string
-  usage: {
-    input_tokens: number
-    output_tokens: number
+  usage?: {
+    prompt_tokens: number
+    completion_tokens: number
+    total_tokens: number
   }
 }
 
@@ -80,56 +81,87 @@ class AIService {
   private model: string
 
   constructor() {
-    // 阿里云百炼 Anthropic 格式端点
-    this.apiUrl = process.env.AI_API_URL || 'https://coding.dashscope.aliyuncs.com/apps/anthropic'
-    this.apiKey = process.env.AI_API_KEY || ''
-    this.model = process.env.AI_MODEL || 'glm-5'
+    // 使用新的配置
+    this.apiUrl = process.env.AI_API_URL || 'https://www.finna.com.cn/v1/chat/completions'
+    this.apiKey = process.env.AI_API_KEY || 'app-PvoiFWuSXcN4kwCBuplgOnnC'
+    this.model = process.env.AI_MODEL || 'qwq-32b'
     console.log(`[AI Service] 初始化完成，API: ${this.apiUrl}, 模型: ${this.model}`)
   }
 
   /**
-   * 调用AI模型（Anthropic 格式）
+   * 调用AI模型（OpenAI 格式，支持流式模式）
    */
   private async chat(messages: AIMessage[], systemPrompt?: string): Promise<string> {
     try {
-      const requestBody: any = {
-        model: this.model,
-        max_tokens: 4096,
-        messages
-      }
-
-      // system 作为顶级参数
+      // 构建消息列表，system 消息放在最前面
+      const fullMessages: AIMessage[] = []
       if (systemPrompt) {
-        requestBody.system = systemPrompt
+        fullMessages.push({ role: 'system', content: systemPrompt })
+      }
+      fullMessages.push(...messages)
+
+      const requestBody = {
+        model: this.model,
+        temperature: 0.7,
+        stream: true, // 启用流式模式
+        messages: fullMessages
       }
 
-      const response = await axios.post<AIResponse>(
-        `${this.apiUrl}/v1/messages`,
+      const response = await axios.post(
+        this.apiUrl,
         requestBody,
         {
           headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': this.apiKey,
-            'anthropic-version': '2023-06-01'
+            'Authorization': `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json; charset=utf-8'
           },
-          timeout: 120000 // 2分钟超时
+          responseType: 'stream',
+          timeout: 180000 // 3分钟超时
         }
       )
 
-      // 从响应中提取文本内容
-      const content = response.data.content
-      let text = ''
-      for (const item of content) {
-        if (item.type === 'text' && item.text) {
-          text += item.text
-        }
-      }
+      // 收集流式响应
+      return new Promise((resolve, reject) => {
+        let fullContent = ''
 
-      if (!text) {
-        throw new Error('AI模型返回内容为空')
-      }
+        response.data.on('data', (chunk: Buffer) => {
+          const lines = chunk.toString().split('\n').filter(line => line.trim() !== '')
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const data = line.slice(6)
+              if (data === '[DONE]') continue
+              try {
+                const parsed = JSON.parse(data)
+                const delta = parsed.choices?.[0]?.delta
+                // 同时处理 content 和 reasoning_content 字段
+                if (delta?.content) {
+                  fullContent += delta.content
+                }
+                // reasoning_content 是推理过程，也可以收集（可选）
+                // if (delta?.reasoning_content) {
+                //   fullContent += delta.reasoning_content
+                // }
+              } catch (e) {
+                // 忽略解析错误
+              }
+            }
+          }
+        })
 
-      return text
+        response.data.on('end', () => {
+          console.log(`[AI Service] 流式响应完成，内容长度: ${fullContent.length}`)
+          if (fullContent) {
+            resolve(fullContent)
+          } else {
+            reject(new Error('AI接口返回内容为空'))
+          }
+        })
+
+        response.data.on('error', (err: Error) => {
+          console.error('[AI Service] 流式响应错误:', err)
+          reject(new Error('AI服务流式调用失败: ' + err.message))
+        })
+      })
     } catch (error: any) {
       console.error('[AI Service] 调用错误:', error?.response?.data || error?.message)
       throw new Error('AI服务调用失败: ' + (error?.response?.data?.error?.message || error?.message || '未知错误'))
@@ -242,7 +274,7 @@ ${documentText.substring(0, 12000)}`
   }
 
   /**
-   * OCR识别OA截图
+   * OCR识别OA截图（使用 OpenAI 多模态格式）
    */
   async recognizeOCR(imageBase64: string): Promise<OCRResult> {
     const systemPrompt = `你是一个专业的财务数据分析师。请分析用户提供的OA系统截图，提取以下财务信息：
@@ -267,42 +299,37 @@ ${documentText.substring(0, 12000)}`
 
     try {
       const response = await axios.post<AIResponse>(
-        `${this.apiUrl}/v1/messages`,
+        this.apiUrl,
         {
           model: this.model,
-          max_tokens: 2048,
-          system: systemPrompt,
+          temperature: 0.7,
+          stream: false,
           messages: [
+            { role: 'system', content: systemPrompt },
             {
               role: 'user',
               content: [
                 { type: 'text', text: '请识别并提取图片中的财务数据。' },
-                { type: 'image', source: { type: 'base64', media_type: 'image/png', data: imageBase64 } }
+                { type: 'image_url', image_url: { url: `data:image/png;base64,${imageBase64}` } }
               ]
             }
           ]
         },
         {
           headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': this.apiKey,
-            'anthropic-version': '2023-06-01'
+            'Authorization': `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json; charset=utf-8'
           },
           timeout: 60000
         }
       )
 
-      const content = response.data.content
-      let text = ''
-      for (const item of content) {
-        if (item.type === 'text' && item.text) {
-          text += item.text
+      if (response.data.choices && response.data.choices.length > 0) {
+        const text = response.data.choices[0].message.content
+        const jsonMatch = text.match(/\{[\s\S]*\}/)
+        if (jsonMatch) {
+          return JSON.parse(jsonMatch[0])
         }
-      }
-
-      const jsonMatch = text.match(/\{[\s\S]*\}/)
-      if (jsonMatch) {
-        return JSON.parse(jsonMatch[0])
       }
     } catch (error) {
       console.error('[AI Service] OCR 识别错误:', error)
@@ -358,7 +385,7 @@ ${data.teamCosts.map(t => `- ${t.team}: 预期${t.expected}万, 实际${t.actual
   }
 
   /**
-   * 识别项目偏差截图
+   * 识别项目偏差截图（使用 OpenAI 多模态格式）
    */
   async recognizeProjectScreenshots(
     screenshots: { type: string; base64: string }[]
@@ -384,43 +411,38 @@ ${data.teamCosts.map(t => `- ${t.team}: 预期${t.expected}万, 实际${t.actual
     for (const screenshot of screenshots) {
       try {
         const response = await axios.post<AIResponse>(
-          `${this.apiUrl}/v1/messages`,
+          this.apiUrl,
           {
             model: this.model,
-            max_tokens: 2048,
-            system: systemPrompt,
+            temperature: 0.7,
+            stream: false,
             messages: [
+              { role: 'system', content: systemPrompt },
               {
                 role: 'user',
                 content: [
                   { type: 'text', text: `请识别这张${screenshot.type}类型的截图并提取关键信息。` },
-                  { type: 'image', source: { type: 'base64', media_type: 'image/png', data: screenshot.base64 } }
+                  { type: 'image_url', image_url: { url: `data:image/png;base64,${screenshot.base64}` } }
                 ]
               }
             ]
           },
           {
             headers: {
-              'Content-Type': 'application/json',
-              'x-api-key': this.apiKey,
-              'anthropic-version': '2023-06-01'
+              'Authorization': `Bearer ${this.apiKey}`,
+              'Content-Type': 'application/json; charset=utf-8'
             },
             timeout: 60000
           }
         )
 
-        const content = response.data.content
-        let text = ''
-        for (const item of content) {
-          if (item.type === 'text' && item.text) {
-            text += item.text
+        if (response.data.choices && response.data.choices.length > 0) {
+          const text = response.data.choices[0].message.content
+          const jsonMatch = text.match(/\{[\s\S]*\}/)
+          if (jsonMatch) {
+            const parsed = JSON.parse(jsonMatch[0])
+            Object.assign(results, parsed)
           }
-        }
-
-        const jsonMatch = text.match(/\{[\s\S]*\}/)
-        if (jsonMatch) {
-          const parsed = JSON.parse(jsonMatch[0])
-          Object.assign(results, parsed)
         }
       } catch (error) {
         console.error('[AI Service] 截图识别错误:', error)

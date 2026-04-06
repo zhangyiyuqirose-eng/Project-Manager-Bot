@@ -4,6 +4,7 @@ import path from 'path'
 import fs from 'fs'
 import { v4 as uuidv4 } from 'uuid'
 import mammoth from 'mammoth'
+import ExcelJS from 'exceljs'
 import prisma from '../config/database'
 import { authMiddleware } from '../middlewares/auth'
 import aiService from '../services/aiService'
@@ -514,6 +515,7 @@ router.post('/:projectId/calculate', authMiddleware, async (req: Request, res: R
         stage: phase.name,
         manDays: totalDays,
         percentage: 0, // 后面计算
+        cost: 0, // 后面计算
         description: `${phase.name}阶段工作量`
       })
     }
@@ -525,6 +527,7 @@ router.post('/:projectId/calculate', authMiddleware, async (req: Request, res: R
       stage: '投产上线',
       manDays: goLiveDays,
       percentage: 2,
+      cost: 0, // 后面计算
       description: '上线部署及技术支持'
     })
 
@@ -571,6 +574,11 @@ router.post('/:projectId/calculate', authMiddleware, async (req: Request, res: R
 
     const totalCost = Math.round((productCost + uiCost + devCost + testCost + pmCost) * 100) / 100
     const manMonth = Math.round(totalManDay / 21.75 * 100) / 100
+
+    // 计算每个阶段的成本
+    stageDetail.forEach(s => {
+      s.cost = Math.round(s.manDays / totalManDay * totalCost * 100) / 100
+    })
 
     // 添加计算轨迹
     calcTrace.push({
@@ -641,6 +649,50 @@ router.post('/:projectId/calculate', authMiddleware, async (req: Request, res: R
 })
 
 /**
+ * GET /:projectId/parse-result - 获取文档解析结果
+ */
+router.get('/:projectId/parse-result', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const authReq = req as AuthenticatedRequest
+    const { projectId } = req.params
+    const userId = authReq.userId
+
+    if (!await verifyProjectOwnership(Number(projectId), userId)) {
+      return sendError(res, 403, '无权访问该项目')
+    }
+
+    const document = await prisma.projectDocument.findFirst({
+      where: { projectId: Number(projectId) }
+    })
+
+    if (!document) {
+      return sendError(res, 404, '未找到项目文档')
+    }
+
+    // 如果文档尚未解析，返回待解析状态而不是404错误
+    if (!document.parseResult) {
+      sendResponse(res, {
+        documentId: document.id,
+        parseStatus: document.parseStatus || 'pending',
+        parseResult: null
+      }, '文档尚未解析')
+      return
+    }
+
+    const parseResult: ParseResult = JSON.parse(document.parseResult)
+
+    sendResponse(res, {
+      documentId: document.id,
+      parseStatus: document.parseStatus,
+      parseResult
+    }, '获取解析结果成功')
+  } catch (error) {
+    console.error('Get parse result error:', error)
+    sendError(res, 500, '获取解析结果失败')
+  }
+})
+
+/**
  * GET /:projectId/result - 获取计算结果
  */
 router.get('/:projectId/result', authMiddleware, async (req: Request, res: Response) => {
@@ -679,6 +731,783 @@ router.get('/:projectId/result', authMiddleware, async (req: Request, res: Respo
   }
 })
 
+// ==================== Excel 导出辅助函数 ====================
+
+// 阶段颜色配置
+const PHASE_BG: Record<string, string> = {
+  '需求': 'EBF3FB',
+  'UI设计': 'FFF9C4',
+  '技术设计': 'E3F2FD',
+  '开发': 'E2EFDA',
+  '技术测试': 'FCE4D6',
+  '性能测试': 'EDEDED',
+  '投产上线': 'F3E5F5'
+}
+
+// 阶段描述
+const PHASE_DESC: Record<string, string> = {
+  '需求': '根据需求文档，配合业务开展技术调研、需求评审。',
+  'UI设计': '根据业务需求进行交互设计、视觉稿输出及评审。',
+  '技术设计': '根据业务需求进行详细技术设计、数据模型设计。',
+  '开发': '根据详细设计进行编码开发，含代码审查及单元测试。',
+  '技术测试': '编写技术测试方案，执行测试，提交缺陷并跟踪闭环。',
+  '性能测试': '制定性能测试方案，执行压力与负载测试，分析优化。',
+  '投产上线': '上线部署，生产环境功能验证，提供上线技术支持。'
+}
+
+/**
+ * 合规校验计算
+ */
+function validateCompliance(stageDetail: StageDetail[], totalDays: number): {
+  allPass: boolean
+  details: Record<string, { days: number; pct: number; min: number; max: number; pass: boolean }>
+} {
+  // 合规区间配置（占总人天百分比）
+  const complianceRanges: Record<string, [number, number]> = {
+    '需求': [12, 18],
+    '设计': [12, 20],
+    '开发': [30, 40],
+    '技术测试': [15, 25],
+    '性能测试': [0, 12],
+    '投产上线': [2, 2]
+  }
+
+  // 合规校验分母 = 仅被校验阶段的合计
+  const checkStages = ['需求', 'UI设计', '技术设计', '开发', '技术测试', '性能测试', '投产上线']
+  let checkTotal = 0
+
+  // 合并UI设计和技术设计为"设计"
+  const uiDays = stageDetail.find(s => s.stage === 'UI设计')?.manDays || 0
+  const techDesignDays = stageDetail.find(s => s.stage === '技术设计')?.manDays || 0
+  const designDays = uiDays + techDesignDays
+
+  // 计算合规校验分母
+  for (const stage of checkStages) {
+    if (stage === 'UI设计' || stage === '技术设计') continue
+    const days = stageDetail.find(s => s.stage === stage)?.manDays || 0
+    checkTotal += days
+  }
+  checkTotal += designDays // 添加合并的设计天数
+
+  const details: Record<string, { days: number; pct: number; min: number; max: number; pass: boolean }> = {}
+
+  // 需求阶段
+  const reqDays = stageDetail.find(s => s.stage === '需求')?.manDays || 0
+  const reqPct = Math.round(reqDays / checkTotal * 1000) / 10
+  details['需求'] = {
+    days: Math.round(reqDays * 100) / 100,
+    pct: reqPct,
+    min: complianceRanges['需求'][0],
+    max: complianceRanges['需求'][1],
+    pass: reqPct >= complianceRanges['需求'][0] && reqPct <= complianceRanges['需求'][1]
+  }
+
+  // 设计阶段（合并UI设计+技术设计）
+  const designPct = Math.round(designDays / checkTotal * 1000) / 10
+  details['设计'] = {
+    days: Math.round(designDays * 100) / 100,
+    pct: designPct,
+    min: complianceRanges['设计'][0],
+    max: complianceRanges['设计'][1],
+    pass: designPct >= complianceRanges['设计'][0] && designPct <= complianceRanges['设计'][1]
+  }
+
+  // 开发阶段
+  const devDays = stageDetail.find(s => s.stage === '开发')?.manDays || 0
+  const devPct = Math.round(devDays / checkTotal * 1000) / 10
+  details['开发'] = {
+    days: Math.round(devDays * 100) / 100,
+    pct: devPct,
+    min: complianceRanges['开发'][0],
+    max: complianceRanges['开发'][1],
+    pass: devPct >= complianceRanges['开发'][0] && devPct <= complianceRanges['开发'][1]
+  }
+
+  // 技术测试
+  const techTestDays = stageDetail.find(s => s.stage === '技术测试')?.manDays || 0
+  const techTestPct = Math.round(techTestDays / checkTotal * 1000) / 10
+  details['技术测试'] = {
+    days: Math.round(techTestDays * 100) / 100,
+    pct: techTestPct,
+    min: complianceRanges['技术测试'][0],
+    max: complianceRanges['技术测试'][1],
+    pass: techTestPct >= complianceRanges['技术测试'][0] && techTestPct <= complianceRanges['技术测试'][1]
+  }
+
+  // 性能测试
+  const perfTestDays = stageDetail.find(s => s.stage === '性能测试')?.manDays || 0
+  const perfTestPct = Math.round(perfTestDays / checkTotal * 1000) / 10
+  details['性能测试'] = {
+    days: Math.round(perfTestDays * 100) / 100,
+    pct: perfTestPct,
+    min: complianceRanges['性能测试'][0],
+    max: complianceRanges['性能测试'][1],
+    pass: perfTestPct >= complianceRanges['性能测试'][0] && perfTestPct <= complianceRanges['性能测试'][1]
+  }
+
+  // 投产上线
+  const goLiveDays = stageDetail.find(s => s.stage === '投产上线')?.manDays || 0
+  const goLivePct = Math.round(goLiveDays / checkTotal * 1000) / 10
+  details['投产上线'] = {
+    days: Math.round(goLiveDays * 100) / 100,
+    pct: goLivePct,
+    min: complianceRanges['投产上线'][0],
+    max: complianceRanges['投产上线'][1],
+    pass: goLivePct >= complianceRanges['投产上线'][0] && goLivePct <= complianceRanges['投产上线'][1]
+  }
+
+  const allPass = Object.values(details).every(d => d.pass)
+
+  return { allPass, details }
+}
+
+/**
+ * 生成Excel报告（参考Python实现）
+ */
+async function generateExcelReport(
+  project: { projectName: string },
+  result: {
+    totalManDay: number
+    totalCost: number
+    moduleCount: number
+    manMonth: number
+    stageDetail: StageDetail[]
+    teamDetail: TeamDetail[]
+    calcTrace: CalcTraceItem[]
+  },
+  document: { parseResult: string },
+  config: { complexityConfig: string | null; unitPriceConfig: string | null; managementCoefficient: number } | null
+): Promise<Buffer> {
+  const workbook = new ExcelJS.Workbook()
+  workbook.creator = 'IT项目成本估算系统'
+
+  const stageDetail = result.stageDetail
+  const teamDetail = result.teamDetail
+  const totalDays = result.totalManDay
+  const totalMonths = result.manMonth
+
+  // 解析项目名称和系统名称
+  let projectName = project.projectName
+  let systemName = ''
+  let modules: any[] = []
+  try {
+    const parseResult: ParseResult = JSON.parse(document.parseResult)
+    projectName = parseResult.projectName || project.projectName
+    systemName = parseResult.systemName || ''
+    modules = parseResult.modules || []
+  } catch (e) {
+    // ignore
+  }
+
+  // 解析配置
+  const complexityConfig = config ? JSON.parse(config.complexityConfig || '{}') : DEFAULT_COMPLEXITY_CONFIG
+  const dailyRates = config ? JSON.parse(config.unitPriceConfig || '{}') : DEFAULT_DAILY_RATES
+  const mgmtCoeff = config?.managementCoefficient || DEFAULT_MANAGEMENT_COEFFICIENT
+
+  // 合规校验
+  const compliance = validateCompliance(stageDetail, totalDays)
+
+  // 颜色定义
+  const HBG = 'BDD7EE'  // 表头背景
+  const IBG = 'D9E1F2'  // 信息行背景
+  const HEADER_BLUE = '4472C4'  // 主标题蓝色
+
+  // ── Sheet 1: 填写说明 ──
+  const ws1 = workbook.addWorksheet('填写说明')
+  ws1.getColumn('B').width = 90
+
+  // 标题行
+  ws1.mergeCells('B2:M2')
+  const titleCell = ws1.getCell('B2')
+  titleCell.value = '表格说明'
+  titleCell.font = { name: 'Arial', size: 12, bold: true, color: { argb: 'FFFFFF' } }
+  titleCell.alignment = { horizontal: 'center', vertical: 'middle' }
+  titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_BLUE } }
+  titleCell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
+  ws1.getRow(2).height = 28
+
+  // 说明内容
+  const note = [
+    '1. 项目工作量评估表：项目类型涉及实施类项目时需要填写的工作量，工作量内容仅为科技侧工作量，不含业务侧工作量。',
+    '2. 成本汇总表：各团队（产品/UI/研发/测试/项目管理）的人天与成本汇总。',
+    '3. 合规校验表：各阶段工作量占比是否符合行业标准区间。',
+    '4. 产品采购评估表：项目类型涉及产品项目时需要填写。',
+    '5. 计算参数：本次评估使用的所有系数参数，支持追溯。'
+  ].join('\n')
+
+  ws1.mergeCells('B3:M7')
+  const noteCell = ws1.getCell('B3')
+  noteCell.value = note
+  noteCell.font = { name: 'Arial', size: 10 }
+  noteCell.alignment = { horizontal: 'left', vertical: 'top', wrapText: true }
+  noteCell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
+
+  for (let r = 3; r <= 7; r++) {
+    ws1.getRow(r).height = 20
+  }
+
+  // ── Sheet 2: 项目工作量评估表 ──
+  const ws2 = workbook.addWorksheet('项目工作量评估表')
+
+  // 设置列宽
+  ws2.getColumn(1).width = 2
+  ws2.getColumn(2).width = 10
+  ws2.getColumn(3).width = 20
+  ws2.getColumn(4).width = 15
+  ws2.getColumn(5).width = 10
+  ws2.getColumn(6).width = 12
+  ws2.getColumn(7).width = 12
+  ws2.getColumn(8).width = 12
+  ws2.getColumn(9).width = 12
+  ws2.getColumn(10).width = 12
+  ws2.getColumn(11).width = 12
+  ws2.getColumn(12).width = 8
+  ws2.getColumn(13).width = 8
+  ws2.getColumn(14).width = 8
+  ws2.getColumn(15).width = 30
+
+  // 标题行
+  ws2.mergeCells('B2:O2')
+  const mainTitle = ws2.getCell('B2')
+  mainTitle.value = '项目工作量评估表（仅为科技侧工作量）'
+  mainTitle.font = { name: 'Arial', size: 14, bold: true, color: { argb: 'FFFFFF' } }
+  mainTitle.alignment = { horizontal: 'center', vertical: 'middle' }
+  mainTitle.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_BLUE } }
+  ws2.getRow(2).height = 34
+
+  // 项目信息行
+  ws2.mergeCells('B3:D3')
+  const projectInfoCell = ws2.getCell('B3')
+  projectInfoCell.value = `项目编号：`
+  projectInfoCell.font = { name: 'Arial', size: 10 }
+  projectInfoCell.alignment = { horizontal: 'left', vertical: 'middle' }
+  projectInfoCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: IBG } }
+  projectInfoCell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
+
+  ws2.mergeCells('E3:K3')
+  const projectNameCell = ws2.getCell('E3')
+  projectNameCell.value = `项目名称：${projectName}`
+  projectNameCell.font = { name: 'Arial', size: 10 }
+  projectNameCell.alignment = { horizontal: 'left', vertical: 'middle' }
+  projectNameCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: IBG } }
+  projectNameCell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
+
+  ws2.mergeCells('L3:O3')
+  const systemNameCell = ws2.getCell('L3')
+  systemNameCell.value = `系统名称：${systemName}`
+  systemNameCell.font = { name: 'Arial', size: 10 }
+  systemNameCell.alignment = { horizontal: 'left', vertical: 'middle' }
+  systemNameCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: IBG } }
+  systemNameCell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
+  ws2.getRow(3).height = 22
+
+  // 表头行
+  const headers = [
+    { cols: 'B4', val: '项目阶段' },
+    { cols: 'C4', val: '系统模块' },
+    { cols: 'D4:E4', val: '功能' },
+    { cols: 'F4:K4', val: '工作项描述' },
+    { cols: 'L4', val: '备注' },
+    { cols: 'M4', val: '工作量\n(人天)' },
+    { cols: 'N4', val: '合计\n(人天)' },
+    { cols: 'O4', val: '任务描述' }
+  ]
+
+  headers.forEach(h => {
+    const parts = h.cols.split(':')
+    const isMerge = parts.length === 2 && parts[0] !== parts[1]
+    if (isMerge) {
+      ws2.mergeCells(h.cols)
+    }
+    const cell = ws2.getCell(parts[0])
+    cell.value = h.val
+    cell.font = { name: 'Arial', size: 10, bold: true }
+    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HBG } }
+    cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
+  })
+  ws2.getRow(4).height = 34
+
+  // 数据行 - 按阶段分组
+  const organizedData: Record<string, Record<string, { function: string; workload: number }[]>> = {}
+
+  // 从模块生成详细数据
+  for (const module of modules) {
+    const features = module.features || [module.name]
+    for (const phase of PHASES) {
+      const phaseName = phase.name
+      const stageInfo = stageDetail.find(s => s.stage === phaseName)
+      if (!stageInfo || stageInfo.manDays <= 0) continue
+
+      // 计算该阶段该模块的工作量
+      const complexity = (module.complexity || 'medium').toLowerCase()
+      const baseDays = complexityConfig[complexity] || complexityConfig['medium'] || 1.5
+      const associationSystems = (module as any).associationSystems || 1
+      const assocCoeff = getAssociationCoefficient(associationSystems)
+      const flowCoeff = DEFAULT_FLOW_COEFFICIENTS[phase.key] || 0
+      let rawDays = baseDays * assocCoeff * flowCoeff
+      if (phase.usesTechStack) rawDays *= DEFAULT_TECH_STACK_COEFFICIENT
+      const daysWithMgmt = rawDays * (1 + mgmtCoeff)
+      const workload = Math.round(daysWithMgmt * 100) / 100
+
+      if (!organizedData[phaseName]) organizedData[phaseName] = {}
+      if (!organizedData[phaseName][module.name]) organizedData[phaseName][module.name] = []
+
+      for (const featureName of features) {
+        organizedData[phaseName][module.name].push({
+          function: typeof featureName === 'string' ? featureName : featureName,
+          workload: workload / features.length // 分摊到每个功能
+        })
+      }
+    }
+  }
+
+  let row = 5
+  for (const phaseName of ['需求', 'UI设计', '技术设计', '开发', '技术测试', '性能测试']) {
+    if (!organizedData[phaseName]) continue
+
+    const bg = PHASE_BG[phaseName] || 'FFFFFF'
+    const phaseModules = organizedData[phaseName]
+
+    // 检查该阶段是否有实际数据
+    const phaseModuleKeys = Object.keys(phaseModules)
+    if (phaseModuleKeys.length === 0) continue
+
+    const phaseStart = row
+
+    for (const moduleName of phaseModuleKeys) {
+      const items = phaseModules[moduleName]
+      const moduleStart = row
+
+      for (const item of items) {
+        ws2.getRow(row).height = 18
+
+        // 模块名（仅在第一个功能点显示）
+        if (row === moduleStart) {
+          const moduleCell = ws2.getCell(`C${row}`)
+          moduleCell.value = moduleName
+          moduleCell.font = { name: 'Arial', size: 9 }
+          moduleCell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
+          moduleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } }
+          moduleCell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
+        }
+
+        // 功能名
+        ws2.mergeCells(`D${row}:E${row}`)
+        const funcCell = ws2.getCell(`D${row}`)
+        funcCell.value = item.function
+        funcCell.font = { name: 'Arial', size: 9 }
+        funcCell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true }
+        funcCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } }
+        funcCell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
+
+        // 工作项描述
+        ws2.mergeCells(`F${row}:K${row}`)
+        const descCell = ws2.getCell(`F${row}`)
+        descCell.value = PHASE_DESC[phaseName] || ''
+        descCell.font = { name: 'Arial', size: 9 }
+        descCell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true }
+        descCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } }
+        descCell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
+
+        // 备注
+        const remarkCell = ws2.getCell(`L${row}`)
+        remarkCell.value = ''
+        remarkCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } }
+        remarkCell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
+
+        // 工作量
+        const wlCell = ws2.getCell(`M${row}`)
+        wlCell.value = Math.round(item.workload * 100) / 100
+        wlCell.font = { name: 'Arial', size: 9 }
+        wlCell.alignment = { horizontal: 'center', vertical: 'middle' }
+        wlCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } }
+        wlCell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
+        wlCell.numFmt = '#,##0.00'
+
+        row++
+      }
+    }
+
+    const phaseEnd = row - 1
+
+    // 确保有有效的范围才进行合并
+    if (phaseEnd >= phaseStart) {
+      // 阶段名
+      ws2.mergeCells(`B${phaseStart}:B${phaseEnd}`)
+      const phaseCell = ws2.getCell(`B${phaseStart}`)
+      phaseCell.value = phaseName
+      phaseCell.font = { name: 'Arial', size: 10, bold: true }
+      phaseCell.alignment = { horizontal: 'center', vertical: 'middle' }
+      phaseCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } }
+      phaseCell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
+
+      // 阶段合计
+      ws2.mergeCells(`N${phaseStart}:N${phaseEnd}`)
+      const sumCell = ws2.getCell(`N${phaseStart}`)
+      sumCell.value = { formula: `SUM(M${phaseStart}:M${phaseEnd})` }
+      sumCell.font = { name: 'Arial', size: 10, bold: true }
+      sumCell.alignment = { horizontal: 'center', vertical: 'middle' }
+      sumCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } }
+      sumCell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
+      sumCell.numFmt = '#,##0.00'
+
+      // 任务描述
+      ws2.mergeCells(`O${phaseStart}:O${phaseEnd}`)
+      const taskDescCell = ws2.getCell(`O${phaseStart}`)
+      taskDescCell.value = PHASE_DESC[phaseName] || ''
+      taskDescCell.font = { name: 'Arial', size: 9 }
+      taskDescCell.alignment = { horizontal: 'left', vertical: 'top', wrapText: true }
+      taskDescCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } }
+      taskDescCell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
+    }
+  }
+
+  // 投产上线行
+  const goLiveBg = PHASE_BG['投产上线'] || 'F3E5F5'
+  const goLiveStage = stageDetail.find(s => s.stage === '投产上线')
+  const goLiveDays = goLiveStage?.manDays || 0
+
+  ws2.mergeCells(`B${row}:M${row}`)
+  const goLiveTitle = ws2.getCell(`B${row}`)
+  goLiveTitle.value = `投产上线（以上阶段合计 × ${Math.round(DEFAULT_GO_LIVE_PERCENTAGE * 100)}%）`
+  goLiveTitle.font = { name: 'Arial', size: 10, bold: true }
+  goLiveTitle.alignment = { horizontal: 'left', vertical: 'middle' }
+  goLiveTitle.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: goLiveBg } }
+  goLiveTitle.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
+
+  const goLiveSumCell = ws2.getCell(`N${row}`)
+  goLiveSumCell.value = goLiveDays
+  goLiveSumCell.font = { name: 'Arial', size: 10, bold: true }
+  goLiveSumCell.alignment = { horizontal: 'center', vertical: 'middle' }
+  goLiveSumCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: goLiveBg } }
+  goLiveSumCell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
+  goLiveSumCell.numFmt = '#,##0.00'
+
+  const goLiveDescCell = ws2.getCell(`O${row}`)
+  goLiveDescCell.value = '上线部署及技术支持'
+  goLiveDescCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: goLiveBg } }
+  goLiveDescCell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
+
+  row++
+
+  // 总计行
+  ws2.mergeCells(`B${row}:C${row}`)
+  const totalTitleCell = ws2.getCell(`B${row}`)
+  totalTitleCell.value = '总计（人天）'
+  totalTitleCell.font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FFFFFF' } }
+  totalTitleCell.alignment = { horizontal: 'center', vertical: 'middle' }
+  totalTitleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_BLUE } }
+  totalTitleCell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
+
+  ws2.mergeCells(`D${row}:O${row}`)
+  const totalValueCell = ws2.getCell(`D${row}`)
+  totalValueCell.value = totalDays
+  totalValueCell.font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FFFFFF' } }
+  totalValueCell.alignment = { horizontal: 'center', vertical: 'middle' }
+  totalValueCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_BLUE } }
+  totalValueCell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
+  totalValueCell.numFmt = '#,##0.00'
+  ws2.getRow(row).height = 24
+
+  row++
+
+  // 人月行
+  ws2.mergeCells(`B${row}:C${row}`)
+  const monthTitleCell = ws2.getCell(`B${row}`)
+  monthTitleCell.value = '总计（人月）'
+  monthTitleCell.font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FFFFFF' } }
+  monthTitleCell.alignment = { horizontal: 'center', vertical: 'middle' }
+  monthTitleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_BLUE } }
+  monthTitleCell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
+
+  ws2.mergeCells(`D${row}:O${row}`)
+  const monthValueCell = ws2.getCell(`D${row}`)
+  monthValueCell.value = totalMonths
+  monthValueCell.font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FFFFFF' } }
+  monthValueCell.alignment = { horizontal: 'center', vertical: 'middle' }
+  monthValueCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_BLUE } }
+  monthValueCell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
+  monthValueCell.numFmt = '#,##0.00'
+  ws2.getRow(row).height = 24
+
+  // ── Sheet 3: 成本汇总表 ──
+  const ws3 = workbook.addWorksheet('成本汇总表')
+  ws3.getColumn('B').width = 18
+  ws3.getColumn('C').width = 14
+  ws3.getColumn('D').width = 14
+  ws3.getColumn('E').width = 20
+  ws3.getColumn('F').width = 20
+
+  // 标题
+  ws3.mergeCells('B1:F1')
+  const costTitle = ws3.getCell('B1')
+  costTitle.value = '项目团队成本汇总表'
+  costTitle.font = { name: 'Arial', size: 13, bold: true, color: { argb: 'FFFFFF' } }
+  costTitle.alignment = { horizontal: 'center', vertical: 'middle' }
+  costTitle.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_BLUE } }
+  ws3.getRow(1).height = 30
+
+  // 项目信息
+  ws3.mergeCells('B2:F2')
+  const costProjectInfo = ws3.getCell('B2')
+  costProjectInfo.value = `项目：${projectName}  |  系统：${systemName}`
+  costProjectInfo.font = { name: 'Arial', size: 10 }
+  costProjectInfo.alignment = { horizontal: 'left', vertical: 'middle' }
+  costProjectInfo.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: IBG } }
+
+  // 表头
+  const costHeaders = ['团队', '工作量（人天）', '单价（元/天）', '成本（元）', '说明']
+  costHeaders.forEach((h, i) => {
+    const cell = ws3.getCell(3, i + 2)
+    cell.value = h
+    cell.font = { name: 'Arial', size: 10, bold: true }
+    cell.alignment = { horizontal: 'center', vertical: 'middle' }
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HBG } }
+    cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
+  })
+  ws3.getRow(3).height = 22
+
+  // 成本数据
+  const costRows = [
+    { label: '产品团队', days: teamDetail[0]?.manDays || 0, rate: dailyRates.product_manager || 2000, cost: teamDetail[0]?.totalCost || 0, note: '需求分析阶段' },
+    { label: 'UI团队', days: teamDetail[1]?.manDays || 0, rate: dailyRates.ui_designer || 1800, cost: teamDetail[1]?.totalCost || 0, note: 'UI/UX设计阶段' },
+    { label: '研发团队', days: teamDetail[2]?.manDays || 0, rate: '前端/后端混合', cost: teamDetail[2]?.totalCost || 0, note: '前端+后端混合' },
+    { label: '测试团队', days: teamDetail[3]?.manDays || 0, rate: '功能/性能混合', cost: teamDetail[3]?.totalCost || 0, note: '技术测试+性能测试' },
+    { label: '项目管理', days: teamDetail[4]?.manDays || 0, rate: dailyRates.project_manager || 2000, cost: teamDetail[4]?.totalCost || 0, note: `管理系数${Math.round(mgmtCoeff * 100)}%+投产` }
+  ]
+
+  costRows.forEach((r, i) => {
+    const rowIdx = i + 4
+    const bg = i % 2 === 0 ? 'F8FAFC' : 'FFFFFF'
+
+    ws3.getCell(rowIdx, 2).value = r.label
+    ws3.getCell(rowIdx, 2).font = { name: 'Arial', size: 10, bold: true }
+    ws3.getCell(rowIdx, 2).alignment = { horizontal: 'left', vertical: 'middle' }
+    ws3.getCell(rowIdx, 2).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } }
+    ws3.getCell(rowIdx, 2).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
+
+    ws3.getCell(rowIdx, 3).value = Math.round(r.days * 100) / 100
+    ws3.getCell(rowIdx, 3).alignment = { horizontal: 'center', vertical: 'middle' }
+    ws3.getCell(rowIdx, 3).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } }
+    ws3.getCell(rowIdx, 3).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
+    ws3.getCell(rowIdx, 3).numFmt = '#,##0.00'
+
+    ws3.getCell(rowIdx, 4).value = r.rate
+    ws3.getCell(rowIdx, 4).alignment = { horizontal: 'left', vertical: 'middle' }
+    ws3.getCell(rowIdx, 4).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } }
+    ws3.getCell(rowIdx, 4).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
+
+    ws3.getCell(rowIdx, 5).value = Math.round(r.cost * 100) / 100
+    ws3.getCell(rowIdx, 5).alignment = { horizontal: 'center', vertical: 'middle' }
+    ws3.getCell(rowIdx, 5).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } }
+    ws3.getCell(rowIdx, 5).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
+    ws3.getCell(rowIdx, 5).numFmt = '#,##0.00'
+
+    ws3.getCell(rowIdx, 6).value = r.note
+    ws3.getCell(rowIdx, 6).font = { name: 'Arial', size: 9 }
+    ws3.getCell(rowIdx, 6).alignment = { horizontal: 'left', vertical: 'middle' }
+    ws3.getCell(rowIdx, 6).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } }
+    ws3.getCell(rowIdx, 6).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
+
+    ws3.getRow(rowIdx).height = 20
+  })
+
+  // 总成本行
+  const totalCostRow = costRows.length + 4
+  ws3.mergeCells(`B${totalCostRow}:D${totalCostRow}`)
+  const totalCostTitle = ws3.getCell(`B${totalCostRow}`)
+  totalCostTitle.value = '项目总成本'
+  totalCostTitle.font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FFFFFF' } }
+  totalCostTitle.alignment = { horizontal: 'center', vertical: 'middle' }
+  totalCostTitle.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_BLUE } }
+  totalCostTitle.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
+
+  ws3.mergeCells(`E${totalCostRow}:F${totalCostRow}`)
+  const totalCostValue = ws3.getCell(`E${totalCostRow}`)
+  totalCostValue.value = result.totalCost
+  totalCostValue.font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FFFFFF' } }
+  totalCostValue.alignment = { horizontal: 'center', vertical: 'middle' }
+  totalCostValue.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_BLUE } }
+  totalCostValue.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
+  totalCostValue.numFmt = '#,##0.00'
+  ws3.getRow(totalCostRow).height = 26
+
+  // ── Sheet 4: 合规校验报告 ──
+  const ws4 = workbook.addWorksheet('合规校验报告')
+  ws4.getColumn('B').width = 14
+  ws4.getColumn('C').width = 12
+  ws4.getColumn('D').width = 10
+  ws4.getColumn('E').width = 10
+  ws4.getColumn('F').width = 10
+  ws4.getColumn('G').width = 12
+  ws4.getColumn('H').width = 16
+
+  // 标题
+  ws4.mergeCells('B1:H1')
+  const complianceTitle = ws4.getCell('B1')
+  complianceTitle.value = '各阶段工作量合规校验报告'
+  complianceTitle.font = { name: 'Arial', size: 13, bold: true, color: { argb: 'FFFFFF' } }
+  complianceTitle.alignment = { horizontal: 'center', vertical: 'middle' }
+  complianceTitle.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_BLUE } }
+  ws4.getRow(1).height = 30
+
+  // 总体结果
+  const overallBg = compliance.allPass ? '4CAF50' : 'FF9800'
+  const overallText = compliance.allPass ? '✅ 全部通过' : '⚠️ 存在超出区间'
+  ws4.mergeCells('B2:H2')
+  const overallCell = ws4.getCell('B2')
+  overallCell.value = `总体结果：${overallText}  （总计 ${totalDays} 人天 / ${totalMonths} 人月）`
+  overallCell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FFFFFF' } }
+  overallCell.alignment = { horizontal: 'left', vertical: 'middle' }
+  overallCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: overallBg } }
+
+  // 表头
+  const complianceHeaders = ['阶段', '人天', '占比%', '最低%', '最高%', '结果', '备注']
+  complianceHeaders.forEach((h, i) => {
+    const cell = ws4.getCell(3, i + 2)
+    cell.value = h
+    cell.font = { name: 'Arial', size: 10, bold: true }
+    cell.alignment = { horizontal: 'center', vertical: 'middle' }
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HBG } }
+    cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
+  })
+  ws4.getRow(3).height = 22
+
+  // 合规数据
+  Object.entries(compliance.details).forEach(([phase, detail], i) => {
+    const rowIdx = i + 4
+    const passed = detail.pass
+    const bg = passed ? 'F1F8E9' : 'FFF3E0'
+    const resultText = passed ? '✅ 通过' : '⚠️ 超出区间'
+    const noteText = passed ? '' : `实际${detail.pct}%，区间[${detail.min}%，${detail.max}%]`
+    const textColor = passed ? '166534' : 'B45309'
+
+    ws4.getCell(rowIdx, 2).value = phase
+    ws4.getCell(rowIdx, 2).font = { name: 'Arial', size: 10, bold: true }
+    ws4.getCell(rowIdx, 2).alignment = { horizontal: 'left', vertical: 'middle' }
+    ws4.getCell(rowIdx, 2).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } }
+    ws4.getCell(rowIdx, 2).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
+
+    ws4.getCell(rowIdx, 3).value = detail.days
+    ws4.getCell(rowIdx, 3).alignment = { horizontal: 'center', vertical: 'middle' }
+    ws4.getCell(rowIdx, 3).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } }
+    ws4.getCell(rowIdx, 3).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
+    ws4.getCell(rowIdx, 3).numFmt = '#,##0.00'
+
+    ws4.getCell(rowIdx, 4).value = detail.pct
+    ws4.getCell(rowIdx, 4).alignment = { horizontal: 'center', vertical: 'middle' }
+    ws4.getCell(rowIdx, 4).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } }
+    ws4.getCell(rowIdx, 4).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
+    ws4.getCell(rowIdx, 4).numFmt = '0.0'
+
+    ws4.getCell(rowIdx, 5).value = detail.min
+    ws4.getCell(rowIdx, 5).alignment = { horizontal: 'center', vertical: 'middle' }
+    ws4.getCell(rowIdx, 5).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } }
+    ws4.getCell(rowIdx, 5).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
+
+    ws4.getCell(rowIdx, 6).value = detail.max
+    ws4.getCell(rowIdx, 6).alignment = { horizontal: 'center', vertical: 'middle' }
+    ws4.getCell(rowIdx, 6).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } }
+    ws4.getCell(rowIdx, 6).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
+
+    ws4.getCell(rowIdx, 7).value = resultText
+    ws4.getCell(rowIdx, 7).font = { name: 'Arial', size: 10, color: { argb: textColor } }
+    ws4.getCell(rowIdx, 7).alignment = { horizontal: 'center', vertical: 'middle' }
+    ws4.getCell(rowIdx, 7).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } }
+    ws4.getCell(rowIdx, 7).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
+
+    ws4.getCell(rowIdx, 8).value = noteText
+    ws4.getCell(rowIdx, 8).font = { name: 'Arial', size: 9 }
+    ws4.getCell(rowIdx, 8).alignment = { horizontal: 'left', vertical: 'middle' }
+    ws4.getCell(rowIdx, 8).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } }
+    ws4.getCell(rowIdx, 8).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
+
+    ws4.getRow(rowIdx).height = 20
+  })
+
+  // ── Sheet 5: 计算参数 ──
+  const ws5 = workbook.addWorksheet('计算参数')
+  ws5.getColumn('B').width = 22
+  ws5.getColumn('C').width = 18
+  ws5.getColumn('D').width = 28
+
+  // 标题
+  ws5.mergeCells('B1:D1')
+  const paramTitle = ws5.getCell('B1')
+  paramTitle.value = '本次评估计算参数'
+  paramTitle.font = { name: 'Arial', size: 13, bold: true, color: { argb: 'FFFFFF' } }
+  paramTitle.alignment = { horizontal: 'center', vertical: 'middle' }
+  paramTitle.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_BLUE } }
+  ws5.getRow(1).height = 28
+
+  // 表头
+  const paramHeaders = ['参数名称', '参数值', '说明']
+  paramHeaders.forEach((h, i) => {
+    const cell = ws5.getCell(2, i + 2)
+    cell.value = h
+    cell.font = { name: 'Arial', size: 10, bold: true }
+    cell.alignment = { horizontal: 'center', vertical: 'middle' }
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HBG } }
+    cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
+  })
+
+  // 参数数据
+  const paramRows = [
+    ['系统关联度系数', DEFAULT_ASSOCIATION_COEFFICIENT, '关联系统数量决定取值(1/1.5/2/3)'],
+    ['技术栈难度系数', DEFAULT_TECH_STACK_COEFFICIENT, '常规1.0/微服务1.3/AI中台1.4/分布式1.6'],
+    ['管理系数', mgmtCoeff, '小型团队≤10人: 0.15; 中型0.20; 大型0.25'],
+    ['投产上线比例', `${Math.round(DEFAULT_GO_LIVE_PERCENTAGE * 100)}%`, '前置阶段合计 × 该系数'],
+    ['需求流程系数', DEFAULT_FLOW_COEFFICIENTS['requirements'], ''],
+    ['UI设计流程系数', DEFAULT_FLOW_COEFFICIENTS['ui_design'], ''],
+    ['技术设计流程系数', DEFAULT_FLOW_COEFFICIENTS['tech_design'], ''],
+    ['开发流程系数', DEFAULT_FLOW_COEFFICIENTS['development'], ''],
+    ['技术测试流程系数', DEFAULT_FLOW_COEFFICIENTS['tech_testing'], ''],
+    ['性能测试流程系数', DEFAULT_FLOW_COEFFICIENTS['perf_testing'], ''],
+    ['较为基础复杂度基准', complexityConfig['very_basic'] || 0.5, '人天'],
+    ['基础复杂度基准', complexityConfig['basic'] || 1.0, '人天'],
+    ['中等复杂度基准', complexityConfig['medium'] || 1.5, '人天'],
+    ['复杂复杂度基准', complexityConfig['complex'] || 2.0, '人天'],
+    ['极复杂复杂度基准', complexityConfig['very_complex'] || 2.5, '人天'],
+    ['产品经理单价', dailyRates['product_manager'] || 2000, '元/人天'],
+    ['UI设计单价', dailyRates['ui_designer'] || 1800, '元/人天'],
+    ['前端开发单价', dailyRates['frontend_dev'] || 1800, '元/人天'],
+    ['后端开发单价', dailyRates['backend_dev'] || 2000, '元/人天'],
+    ['功能测试单价', dailyRates['func_tester'] || 1500, '元/人天'],
+    ['性能测试单价', dailyRates['perf_tester'] || 2000, '元/人天'],
+    ['项目经理单价', dailyRates['project_manager'] || 2000, '元/人天']
+  ]
+
+  paramRows.forEach((r, i) => {
+    const rowIdx = i + 3
+    const bg = i % 2 === 0 ? 'F8FAFC' : 'FFFFFF'
+
+    ws5.getCell(rowIdx, 2).value = r[0]
+    ws5.getCell(rowIdx, 2).alignment = { horizontal: 'left', vertical: 'middle' }
+    ws5.getCell(rowIdx, 2).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } }
+    ws5.getCell(rowIdx, 2).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
+
+    ws5.getCell(rowIdx, 3).value = r[1]
+    ws5.getCell(rowIdx, 3).alignment = { horizontal: 'center', vertical: 'middle' }
+    ws5.getCell(rowIdx, 3).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } }
+    ws5.getCell(rowIdx, 3).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
+
+    ws5.getCell(rowIdx, 4).value = r[2]
+    ws5.getCell(rowIdx, 4).font = { name: 'Arial', size: 9 }
+    ws5.getCell(rowIdx, 4).alignment = { horizontal: 'left', vertical: 'middle' }
+    ws5.getCell(rowIdx, 4).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } }
+    ws5.getCell(rowIdx, 4).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
+
+    ws5.getRow(rowIdx).height = 18
+  })
+
+  // 生成Buffer
+  const buffer = await workbook.xlsx.writeBuffer()
+  return Buffer.from(buffer)
+}
+
+const DEFAULT_ASSOCIATION_COEFFICIENT = 1.0
+
 /**
  * GET /:projectId/export - 导出Excel报告
  */
@@ -688,7 +1517,10 @@ router.get('/:projectId/export', authMiddleware, async (req: Request, res: Respo
     const { projectId } = req.params
     const userId = authReq.userId
 
+    console.log(`[Export] 开始导出, projectId=${projectId}, userId=${userId}`)
+
     if (!await verifyProjectOwnership(Number(projectId), userId)) {
+      console.log(`[Export] 无权访问该项目`)
       return sendError(res, 403, '无权访问该项目')
     }
 
@@ -701,65 +1533,71 @@ router.get('/:projectId/export', authMiddleware, async (req: Request, res: Respo
       orderBy: { createdAt: 'desc' }
     })
 
-    if (!result || !project) {
-      return sendError(res, 404, '未找到计算结果')
+    const document = await prisma.projectDocument.findFirst({
+      where: { projectId: Number(projectId) }
+    })
+
+    const config = await prisma.estimateConfig.findFirst({
+      where: { projectId: Number(projectId) }
+    })
+
+    console.log(`[Export] 查询结果: project=${!!project}, result=${!!result}, document=${!!document}, config=${!!config}`)
+
+    if (!result || !project || !document) {
+      console.log(`[Export] 未找到计算结果或项目信息`)
+      return sendError(res, 404, '未找到计算结果或项目信息')
+    }
+
+    if (!document.parseResult) {
+      console.log(`[Export] 未找到文档解析结果`)
+      return sendError(res, 404, '未找到文档解析结果')
     }
 
     const stageDetail: StageDetail[] = JSON.parse(result.stageDetail || '[]')
     const teamDetail: TeamDetail[] = JSON.parse(result.teamDetail || '[]')
+    const calcTrace: CalcTraceItem[] = JSON.parse(result.calcTrace || '[]')
 
-    // 导出目录
-    const exportDir = path.join(process.cwd(), 'uploads', 'exports')
-    if (!fs.existsSync(exportDir)) {
-      fs.mkdirSync(exportDir, { recursive: true })
+    const resultData = {
+      totalManDay: result.totalManDay,
+      totalCost: result.totalCost,
+      moduleCount: result.moduleCount,
+      manMonth: result.manMonth,
+      stageDetail,
+      teamDetail,
+      calcTrace
     }
 
-    const fileName = `estimate_${project.projectName}_${Date.now()}.xlsx`
-    const filePath = path.join(exportDir, fileName)
+    // 生成Excel
+    const excelBuffer = await generateExcelReport(
+      project,
+      resultData,
+      { parseResult: document.parseResult },
+      config ? {
+        complexityConfig: config.complexityConfig,
+        unitPriceConfig: config.unitPriceConfig,
+        managementCoefficient: config.managementCoefficient
+      } : null
+    )
 
-    // 创建 Excel 文件
-    const xlsx = await import('xlsx')
-    const wb = xlsx.utils.book_new()
+    // 生成文件名
+    const timestamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..*/, '').replace('T', '_').substring(0, 15)
+    const fileName = `工作量评估表_${project.projectName}_${timestamp}.xlsx`
 
-    // 概览页
-    const summaryData = [
-      ['项目名称', project.projectName],
-      ['总工作量（人天）', result.totalManDay],
-      ['总工作量（人月）', result.manMonth],
-      ['模块数量', result.moduleCount],
-      ['总成本（元）', result.totalCost],
-      ['计算时间', result.createdAt.toLocaleString()]
-    ]
-    const summaryWs = xlsx.utils.aoa_to_sheet(summaryData)
-    xlsx.utils.book_append_sheet(wb, summaryWs, '概览')
+    // 设置响应头
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`)
+    res.setHeader('X-Total-Days', String(result.totalManDay))
+    res.setHeader('X-Total-Months', String(result.manMonth))
+    res.setHeader('X-Total-Cost', String(result.totalCost))
+    res.setHeader('X-Module-Count', String(result.moduleCount))
 
-    // 阶段明细页
-    const stageData = [['阶段', '工作量（人天）', '占比（%）', '描述']]
-    stageDetail.forEach(stage => {
-      stageData.push([stage.stage, String(stage.manDays), String(stage.percentage), stage.description])
-    })
-    const stageWs = xlsx.utils.aoa_to_sheet(stageData)
-    xlsx.utils.book_append_sheet(wb, stageWs, '阶段明细')
+    // 发送文件
+    res.send(excelBuffer)
 
-    // 团队明细页
-    const teamData = [['团队', '工作量（人天）', '总成本（元）']]
-    teamDetail.forEach(team => {
-      teamData.push([team.level, String(team.manDays), String(team.totalCost)])
-    })
-    const teamWs = xlsx.utils.aoa_to_sheet(teamData)
-    xlsx.utils.book_append_sheet(wb, teamWs, '团队明细')
-
-    // 写入文件
-    xlsx.writeFile(wb, filePath)
-
-    res.download(filePath, fileName, (err) => {
-      if (err) {
-        console.error('Download error:', err)
-      }
-    })
+    console.log(`[Export] 导出成功: ${fileName}, 总人天=${result.totalManDay}, 总成本=${result.totalCost}`)
   } catch (error) {
     console.error('Export error:', error)
-    sendError(res, 500, '导出报告失败')
+    sendError(res, 500, '导出报告失败: ' + (error instanceof Error ? error.message : '未知错误'))
   }
 })
 

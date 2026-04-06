@@ -19,6 +19,7 @@ import {
 import {
   FileTextOutlined,
   SettingOutlined,
+  FileSearchOutlined,
   BarChartOutlined,
   ReloadOutlined,
   DownloadOutlined,
@@ -42,7 +43,7 @@ import type {
 
 const { Title, Text } = Typography
 
-// 步骤条配置
+// 步骤条配置（4步）
 const stepItems = [
   {
     title: '文件上传',
@@ -53,6 +54,11 @@ const stepItems = [
     title: '参数配置',
     description: '配置计算参数',
     icon: <SettingOutlined />,
+  },
+  {
+    title: '文档解析结果',
+    description: '查看功能点详情',
+    icon: <FileSearchOutlined />,
   },
   {
     title: '结果展示',
@@ -132,7 +138,7 @@ export default function CostEstimateResult() {
   const [searchParams] = useSearchParams()
   const projectId = searchParams.get('projectId')
 
-  const [currentStep] = useState(2)
+  const [currentStep] = useState(3)
   const [loading, setLoading] = useState(true)
   const [recalculating, setRecalculating] = useState(false)
   const [exporting, setExporting] = useState(false)
@@ -154,7 +160,42 @@ export default function CostEstimateResult() {
       try {
         const response = await estimateApi.getResult(Number(projectId))
         if (response.data.code === 0 || response.data.code === 200) {
-          setResult(response.data.data)
+          const data = response.data.data
+          // 转换后端数据格式为前端期望的格式
+          const transformedResult: EstimateResult = {
+            projectId: Number(projectId),
+            totalManDay: data.totalManDay || 0,
+            totalCost: data.totalCost || 0,
+            moduleCount: data.moduleCount || 0,
+            manMonth: data.manMonth || 0,
+            // 转换 stageDetail -> stageBreakdown
+            stageBreakdown: (data.stageDetail || []).map((stage: any) => ({
+              stage: stage.stage,
+              workdays: stage.manDays || 0,
+              cost: stage.cost || 0,
+              ratio: (stage.percentage || 0) / 100
+            })),
+            // 转换 teamDetail -> teamBreakdown
+            teamBreakdown: (data.teamDetail || []).map((team: any) => ({
+              team: team.level || team.team,
+              workdays: team.manDays || 0,
+              cost: team.totalCost || team.cost || 0,
+              ratio: 0
+            })),
+            // 转换 calcTrace -> calculationTrace
+            calculationTrace: (data.calcTrace || []).map((trace: any, index: number) => ({
+              functionName: trace.step || trace.functionName || `步骤${index + 1}`,
+              complexityBase: trace.input?.complexityConfig?.medium || 1.5,
+              systemCoefficient: 1.0,
+              processCoefficient: 1.0,
+              techStackCoefficient: 1.3,
+              managementCoefficient: 0.15,
+              formula: trace.formula || '',
+              result: trace.output?.totalManDay || trace.output?.totalCost || 0,
+              timestamp: new Date().toISOString()
+            }))
+          }
+          setResult(transformedResult)
         }
       } catch {
         message.error('获取结果数据失败')
@@ -175,7 +216,39 @@ export default function CostEstimateResult() {
       const response = await estimateApi.calculate(Number(projectId))
       if (response.data.code === 0 || response.data.code === 200) {
         message.success('重新计算完成')
-        setResult(response.data.data)
+        const data = response.data.data
+        // 转换后端数据格式为前端期望的格式
+        const transformedResult: EstimateResult = {
+          projectId: Number(projectId),
+          totalManDay: data.totalManDay || 0,
+          totalCost: data.totalCost || 0,
+          moduleCount: data.moduleCount || 0,
+          manMonth: data.manMonth || 0,
+          stageBreakdown: (data.stageDetail || []).map((stage: any) => ({
+            stage: stage.stage,
+            workdays: stage.manDays || 0,
+            cost: stage.cost || 0,
+            ratio: (stage.percentage || 0) / 100
+          })),
+          teamBreakdown: (data.teamDetail || []).map((team: any) => ({
+            team: team.level || team.team,
+            workdays: team.manDays || 0,
+            cost: team.totalCost || team.cost || 0,
+            ratio: 0
+          })),
+          calculationTrace: (data.calcTrace || []).map((trace: any, index: number) => ({
+            functionName: trace.step || trace.functionName || `步骤${index + 1}`,
+            complexityBase: trace.input?.complexityConfig?.medium || 1.5,
+            systemCoefficient: 1.0,
+            processCoefficient: 1.0,
+            techStackCoefficient: 1.3,
+            managementCoefficient: 0.15,
+            formula: trace.formula || '',
+            result: trace.output?.totalManDay || trace.output?.totalCost || 0,
+            timestamp: new Date().toISOString()
+          }))
+        }
+        setResult(transformedResult)
       }
     } catch {
       message.error('重新计算失败')
@@ -210,43 +283,100 @@ export default function CostEstimateResult() {
     }
   }
 
-  // 团队工作量饼图配置
+  // 团队工作量饼图配置 - 现代专业设计
   const teamPieConfig = {
-    appendPadding: 10,
+    appendPadding: [20, 20, 20, 20],
     data: result?.teamBreakdown?.map((item) => ({
       type: item.team,
       value: item.workdays,
     })) || [],
     angleField: 'value',
     colorField: 'type',
-    radius: 0.8,
-    innerRadius: 0.6,
+    radius: 0.85,
+    innerRadius: 0.65,
+    // 现代渐变色方案
+    color: ['#667EEA', '#764BA2', '#F093FB', '#F5576C', '#4FACFE', '#00F2FE'],
+    // 外部标签带引导线
     label: {
-      type: 'inner',
-      offset: '-50%',
-      content: '{value}',
+      type: 'spider' as const,
+      formatter: (datum: any) => {
+        const total = result?.teamBreakdown?.reduce((sum: number, item: any) => sum + item.workdays, 0) || 1
+        const percent = ((datum.value / total) * 100).toFixed(1)
+        return `${datum.type}\n${datum.value}天 (${percent}%)`
+      },
       style: {
-        textAlign: 'center',
-        fontSize: 14,
+        fontSize: 12,
+        fill: '#374151',
+        fontWeight: 500,
+      },
+      labelLine: {
+        style: {
+          stroke: '#9CA3AF',
+          lineWidth: 1,
+        },
       },
     },
+    // 右侧图例
     legend: {
-      position: 'bottom' as const,
+      position: 'right' as const,
+      layout: 'vertical' as const,
+      itemName: {
+        style: {
+          fontSize: 13,
+          fill: '#374151',
+        },
+      },
+      itemValue: {
+        style: {
+          fontSize: 13,
+          fill: '#6B7280',
+          fontWeight: 600,
+        },
+        formatter: (text: string, item: any) => {
+          const total = result?.teamBreakdown?.reduce((sum: number, i: any) => sum + i.workdays, 0) || 1
+          const dataItem = result?.teamBreakdown?.find((i: any) => i.team === item.name)
+          const percent = dataItem ? ((dataItem.workdays / total) * 100).toFixed(1) : '0'
+          return `${item.value}天 (${percent}%)`
+        },
+      },
     },
     interactions: [
       { type: 'element-selected' },
       { type: 'element-active' },
+      { type: 'pie-statistic-active' },
     ],
+    // 中心统计信息
     statistic: {
       title: {
-        content: '总人天',
-        offsetY: -8,
-        style: { fontSize: '14px' },
+        offsetY: -12,
+        style: {
+          fontSize: '13px',
+          color: '#6B7280',
+          fontWeight: 400,
+        },
+        customHtml: () => '总工作量',
       },
       content: {
-        content: result?.totalManDay?.toFixed(1) || '0',
-        offsetY: 4,
-        style: { fontSize: '24px' },
+        offsetY: 8,
+        style: {
+          fontSize: '28px',
+          color: '#1F2937',
+          fontWeight: 700,
+        },
+        customHtml: () => `${result?.totalManDay?.toFixed(1) || '0'}<span style="font-size:14px;color:#6B7280;font-weight:400"> 人天</span>`,
+      },
+    },
+    // 悬浮状态样式
+    state: {
+      active: {
+        style: (element: any) => {
+          return {
+            lineWidth: 3,
+            stroke: '#fff',
+            shadowBlur: 12,
+            shadowColor: 'rgba(0, 0, 0, 0.15)',
+          }
+        },
       },
     },
   }
@@ -508,7 +638,7 @@ export default function CostEstimateResult() {
           <Button
             type="primary"
             size="large"
-            onClick={() => navigate(`/cost-estimate/config?projectId=${projectId}`)}
+            onClick={() => navigate(`/cost-estimate/parse-result?projectId=${projectId}`)}
             style={{
               borderRadius: 12,
               height: 44,
@@ -516,7 +646,7 @@ export default function CostEstimateResult() {
               border: 'none',
             }}
           >
-            前往参数配置
+            前往解析结果
           </Button>
         </Card>
       </div>
@@ -886,11 +1016,11 @@ export default function CostEstimateResult() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Button
             size="large"
-            onClick={() => navigate(`/cost-estimate/config?projectId=${projectId}`)}
+            onClick={() => navigate(`/cost-estimate/parse-result?projectId=${projectId}`)}
             style={{ borderRadius: 12, height: 44 }}
           >
             <ArrowLeftOutlined style={{ marginRight: 8 }} />
-            上一步：参数配置
+            上一步：解析结果
           </Button>
           <Space>
             <Tooltip title="重新计算成本预估">
