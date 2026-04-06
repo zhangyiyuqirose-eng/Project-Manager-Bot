@@ -366,35 +366,32 @@ export default function CostConsumptionInput() {
       {/* 步骤条 */}
       <Card
         style={{
-          borderRadius: 16,
-          marginBottom: 24,
-          border: '1px solid #f1f5f9',
+          borderRadius: 20,
+          marginBottom: 32,
+          border: '1px solid var(--color-border-light)',
         }}
       >
-        <Steps current={currentStep} items={stepItems} style={{ marginBottom: 8 }} />
+        <Steps current={currentStep} items={stepItems} />
       </Card>
 
       {/* 功能介绍区域 */}
       <div
         style={{
           background: 'linear-gradient(135deg, #10B981 0%, #34D399 100%)',
-          borderRadius: 20,
-          padding: '32px 40px',
-          marginBottom: 24,
+          borderRadius: 24,
+          padding: '48px 48px',
+          marginBottom: 32,
           position: 'relative',
           overflow: 'hidden',
         }}
       >
-        <div style={{ position: 'absolute', top: -50, right: -50, width: 200, height: 200, borderRadius: '50%', background: 'rgba(255, 255, 255, 0.1)' }} />
-        <div style={{ position: 'absolute', bottom: -80, right: 100, width: 160, height: 160, borderRadius: '50%', background: 'rgba(255, 255, 255, 0.05)' }} />
-
-        <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: 24 }}>
+        <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: 28 }}>
           <div
             style={{
-              width: 64,
-              height: 64,
-              borderRadius: 16,
-              background: 'rgba(255, 255, 255, 0.2)',
+              width: 68,
+              height: 68,
+              borderRadius: 18,
+              background: 'rgba(255, 255, 255, 0.18)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -403,10 +400,10 @@ export default function CostConsumptionInput() {
             <DollarOutlined style={{ fontSize: 32, color: '#fff' }} />
           </div>
           <div>
-            <Title level={3} style={{ color: '#fff', margin: 0, marginBottom: 8 }}>
+            <Title level={3} style={{ color: '#fff', margin: 0, marginBottom: 10 }}>
               成本消耗预估
             </Title>
-            <Text style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: 15 }}>
+            <Text style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: 15, lineHeight: 1.6 }}>
               上传OA截图智能识别，实时追踪成本消耗，预测燃尽时间
             </Text>
           </div>
@@ -416,33 +413,33 @@ export default function CostConsumptionInput() {
       {/* OA截图上传区域 */}
       <Card
         style={{
-          borderRadius: 20,
-          marginBottom: 24,
-          border: '1px solid #f1f5f9',
+          borderRadius: 24,
+          marginBottom: 32,
+          border: '1px solid var(--color-border-light)',
         }}
       >
-        <div style={{ marginBottom: 20 }}>
-          <Title level={4} style={{ marginBottom: 4, fontWeight: 600 }}>
-            <CameraOutlined style={{ marginRight: 8, color: '#10B981' }} />
+        <div style={{ marginBottom: 24 }}>
+          <Title level={4} style={{ marginBottom: 8, fontWeight: 600 }}>
+            <CameraOutlined style={{ marginRight: 10, color: '#10B981' }} />
             OA截图上传
           </Title>
-          <Text type="secondary">上传OA系统截图，AI自动识别项目财务信息</Text>
+          <Text type="secondary" style={{ fontSize: 14 }}>上传OA系统截图，AI自动识别项目财务信息</Text>
         </div>
 
         <Dragger {...draggerProps} disabled={ocrLoading}>
           <p className="ant-upload-drag-icon">
-            <InboxOutlined style={{ color: '#10B981', fontSize: 48 }} />
+            <InboxOutlined style={{ color: '#10B981', fontSize: 52 }} />
           </p>
           <p className="ant-upload-text" style={{ fontSize: 16, fontWeight: 500, color: '#0f172a' }}>
             点击或拖拽图片到此区域上传
           </p>
-          <p className="ant-upload-hint" style={{ color: '#64748b' }}>
+          <p className="ant-upload-hint" style={{ color: '#64748b', fontSize: 14 }}>
             支持多张图片上传，格式为 JPG/PNG/WEBP
           </p>
         </Dragger>
 
         {/* OCR识别按钮 */}
-        <div style={{ marginTop: 20, textAlign: 'center' }}>
+        <div style={{ marginTop: 24, textAlign: 'center' }}>
           <Button
             type="primary"
             size="large"
@@ -450,14 +447,14 @@ export default function CostConsumptionInput() {
             loading={ocrLoading}
             disabled={fileList.length === 0}
             style={{
-              borderRadius: 12,
-              height: 44,
+              borderRadius: 14,
+              height: 48,
               background: 'linear-gradient(135deg, #10B981 0%, #34D399 100%)',
               border: 'none',
               fontWeight: 600,
             }}
           >
-            <CameraOutlined style={{ marginRight: 8 }} />
+            <CameraOutlined style={{ marginRight: 10 }} />
             开始OCR识别
           </Button>
         </div>
@@ -466,30 +463,30 @@ export default function CostConsumptionInput() {
         {ocrSuccess && (
           <Card
             style={{
-              marginTop: 20,
-              borderRadius: 12,
-              background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(52, 211, 153, 0.1) 100%)',
-              border: '1px solid rgba(16, 185, 129, 0.3)',
+              marginTop: 24,
+              borderRadius: 16,
+              background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(52, 211, 153, 0.08) 100%)',
+              border: '1px solid rgba(16, 185, 129, 0.25)',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
               <div
                 style={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: 12,
+                  width: 52,
+                  height: 52,
+                  borderRadius: 14,
                   background: '#10B981',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}
               >
-                <CheckCircleOutlined style={{ fontSize: 24, color: '#fff' }} />
+                <CheckCircleOutlined style={{ fontSize: 26, color: '#fff' }} />
               </div>
               <div>
                 <Text strong style={{ fontSize: 16, color: '#10B981' }}>OCR识别成功</Text>
                 <br />
-                <Text type="secondary">已自动填充识别结果，请核对并修正数据</Text>
+                <Text type="secondary" style={{ fontSize: 14 }}>已自动填充识别结果，请核对并修正数据</Text>
               </div>
             </div>
           </Card>
@@ -499,17 +496,17 @@ export default function CostConsumptionInput() {
       {/* OCR识别结果展示表单 */}
       <Card
         style={{
-          borderRadius: 20,
-          marginBottom: 24,
-          border: '1px solid #f1f5f9',
+          borderRadius: 24,
+          marginBottom: 32,
+          border: '1px solid var(--color-border-light)',
         }}
       >
-        <div style={{ marginBottom: 20 }}>
-          <Title level={4} style={{ marginBottom: 4, fontWeight: 600 }}>
-            <DollarOutlined style={{ marginRight: 8, color: '#3B82F6' }} />
+        <div style={{ marginBottom: 24 }}>
+          <Title level={4} style={{ marginBottom: 8, fontWeight: 600 }}>
+            <DollarOutlined style={{ marginRight: 10, color: '#3B82F6' }} />
             项目信息
           </Title>
-          <Text type="secondary">请核对OCR识别结果或手动输入项目财务数据</Text>
+          <Text type="secondary" style={{ fontSize: 14 }}>请核对OCR识别结果或手动输入项目财务数据</Text>
         </div>
 
         <Form form={form} layout="vertical" initialValues={{
@@ -520,14 +517,14 @@ export default function CostConsumptionInput() {
           externalSoftwareCost: 0,
           currentManpowerCost: 0,
         }}>
-          <Row gutter={24}>
+          <Row gutter={28}>
             <Col xs={24} sm={12} md={8}>
               <Form.Item
                 label={
                   <span>
                     合同金额(万元)
                     <Tooltip title="项目合同总金额">
-                      <InfoCircleOutlined style={{ color: '#64748b', marginLeft: 4 }} />
+                      <InfoCircleOutlined style={{ color: '#64748b', marginLeft: 6 }} />
                     </Tooltip>
                   </span>
                 }
@@ -537,7 +534,7 @@ export default function CostConsumptionInput() {
                 <InputNumber
                   min={0}
                   precision={2}
-                  style={{ width: '100%', borderRadius: 8 }}
+                  style={{ width: '100%', borderRadius: 10 }}
                   placeholder="请输入合同金额"
                 />
               </Form.Item>
@@ -548,7 +545,7 @@ export default function CostConsumptionInput() {
                   <span>
                     售前比例
                     <Tooltip title="售前成本占总合同的比例，如 0.15 表示 15%">
-                      <InfoCircleOutlined style={{ color: '#64748b', marginLeft: 4 }} />
+                      <InfoCircleOutlined style={{ color: '#64748b', marginLeft: 6 }} />
                     </Tooltip>
                   </span>
                 }
@@ -559,7 +556,7 @@ export default function CostConsumptionInput() {
                   min={0}
                   max={1}
                   precision={4}
-                  style={{ width: '100%', borderRadius: 8 }}
+                  style={{ width: '100%', borderRadius: 10 }}
                   placeholder="如: 0.15"
                 />
               </Form.Item>
@@ -570,7 +567,7 @@ export default function CostConsumptionInput() {
                   <span>
                     税率
                     <Tooltip title="项目税率，如 0.06 表示 6%">
-                      <InfoCircleOutlined style={{ color: '#64748b', marginLeft: 4 }} />
+                      <InfoCircleOutlined style={{ color: '#64748b', marginLeft: 6 }} />
                     </Tooltip>
                   </span>
                 }
@@ -581,7 +578,7 @@ export default function CostConsumptionInput() {
                   min={0}
                   max={1}
                   precision={4}
-                  style={{ width: '100%', borderRadius: 8 }}
+                  style={{ width: '100%', borderRadius: 10 }}
                   placeholder="如: 0.06"
                 />
               </Form.Item>
@@ -592,7 +589,7 @@ export default function CostConsumptionInput() {
                   <span>
                     外采人力成本(万元)
                     <Tooltip title="外包人力成本">
-                      <InfoCircleOutlined style={{ color: '#64748b', marginLeft: 4 }} />
+                      <InfoCircleOutlined style={{ color: '#64748b', marginLeft: 6 }} />
                     </Tooltip>
                   </span>
                 }
@@ -601,7 +598,7 @@ export default function CostConsumptionInput() {
                 <InputNumber
                   min={0}
                   precision={2}
-                  style={{ width: '100%', borderRadius: 8 }}
+                  style={{ width: '100%', borderRadius: 10 }}
                   placeholder="请输入外采人力成本"
                 />
               </Form.Item>
@@ -612,7 +609,7 @@ export default function CostConsumptionInput() {
                   <span>
                     外采软件成本(万元)
                     <Tooltip title="外包软件采购成本">
-                      <InfoCircleOutlined style={{ color: '#64748b', marginLeft: 4 }} />
+                      <InfoCircleOutlined style={{ color: '#64748b', marginLeft: 6 }} />
                     </Tooltip>
                   </span>
                 }
@@ -621,7 +618,7 @@ export default function CostConsumptionInput() {
                 <InputNumber
                   min={0}
                   precision={2}
-                  style={{ width: '100%', borderRadius: 8 }}
+                  style={{ width: '100%', borderRadius: 10 }}
                   placeholder="请输入外采软件成本"
                 />
               </Form.Item>
@@ -632,7 +629,7 @@ export default function CostConsumptionInput() {
                   <span>
                     当前人力成本(万元)
                     <Tooltip title="已消耗的人力成本">
-                      <InfoCircleOutlined style={{ color: '#64748b', marginLeft: 4 }} />
+                      <InfoCircleOutlined style={{ color: '#64748b', marginLeft: 6 }} />
                     </Tooltip>
                   </span>
                 }
@@ -641,7 +638,7 @@ export default function CostConsumptionInput() {
                 <InputNumber
                   min={0}
                   precision={2}
-                  style={{ width: '100%', borderRadius: 8 }}
+                  style={{ width: '100%', borderRadius: 10 }}
                   placeholder="请输入当前人力成本"
                 />
               </Form.Item>
@@ -653,17 +650,17 @@ export default function CostConsumptionInput() {
       {/* 项目成员列表表格 */}
       <Card
         style={{
-          borderRadius: 20,
-          marginBottom: 24,
-          border: '1px solid #f1f5f9',
+          borderRadius: 24,
+          marginBottom: 32,
+          border: '1px solid var(--color-border-light)',
         }}
       >
-        <div style={{ marginBottom: 20 }}>
-          <Title level={4} style={{ marginBottom: 4, fontWeight: 600 }}>
-            <TeamOutlined style={{ marginRight: 8, color: '#8B5CF6' }} />
+        <div style={{ marginBottom: 24 }}>
+          <Title level={4} style={{ marginBottom: 8, fontWeight: 600 }}>
+            <TeamOutlined style={{ marginRight: 10, color: '#8B5CF6' }} />
             项目成员列表
           </Title>
-          <Text type="secondary">添加项目成员信息，系统将自动计算人力成本</Text>
+          <Text type="secondary" style={{ fontSize: 14 }}>添加项目成员信息，系统将自动计算人力成本</Text>
         </div>
 
         <Table
@@ -682,8 +679,8 @@ export default function CostConsumptionInput() {
                   <Table.Summary.Cell index={1}>
                     <Tag
                       style={{
-                        borderRadius: 8,
-                        background: '#8B5CF615',
+                        borderRadius: 10,
+                        background: '#8B5CF612',
                         color: '#8B5CF6',
                         border: 'none',
                         fontWeight: 500,
@@ -711,10 +708,10 @@ export default function CostConsumptionInput() {
           icon={<PlusOutlined />}
           onClick={handleAddMember}
           style={{
-            marginTop: 16,
+            marginTop: 20,
             width: '100%',
-            borderRadius: 12,
-            height: 44,
+            borderRadius: 14,
+            height: 48,
             borderStyle: 'dashed',
           }}
         >
@@ -725,15 +722,15 @@ export default function CostConsumptionInput() {
       {/* 操作按钮 */}
       <Card
         style={{
-          borderRadius: 16,
-          border: '1px solid #f1f5f9',
+          borderRadius: 20,
+          border: '1px solid var(--color-border-light)',
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Button
             size="large"
             onClick={() => navigate('/dashboard')}
-            style={{ borderRadius: 12, height: 44 }}
+            style={{ borderRadius: 14, height: 48 }}
           >
             返回首页
           </Button>
@@ -743,15 +740,15 @@ export default function CostConsumptionInput() {
             onClick={handleCalculate}
             loading={saving}
             style={{
-              borderRadius: 12,
-              height: 44,
+              borderRadius: 14,
+              height: 48,
               background: 'linear-gradient(135deg, #10B981 0%, #34D399 100%)',
               border: 'none',
               fontWeight: 600,
             }}
           >
             开始核算
-            <ArrowRightOutlined style={{ marginLeft: 8 }} />
+            <ArrowRightOutlined style={{ marginLeft: 10 }} />
           </Button>
         </div>
       </Card>

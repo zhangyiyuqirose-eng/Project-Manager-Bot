@@ -393,35 +393,32 @@ export default function CostDeviationInput() {
       {/* 步骤条 */}
       <Card
         style={{
-          borderRadius: 16,
-          marginBottom: 24,
-          border: '1px solid #f1f5f9',
+          borderRadius: 20,
+          marginBottom: 32,
+          border: '1px solid var(--color-border-light)',
         }}
       >
-        <Steps current={currentStep} items={stepItems} style={{ marginBottom: 8 }} />
+        <Steps current={currentStep} items={stepItems} />
       </Card>
 
       {/* 功能介绍区域 */}
       <div
         style={{
           background: 'linear-gradient(135deg, #8B5CF6 0%, #EC4899 100%)',
-          borderRadius: 20,
-          padding: '32px 40px',
-          marginBottom: 24,
+          borderRadius: 24,
+          padding: '48px 48px',
+          marginBottom: 32,
           position: 'relative',
           overflow: 'hidden',
         }}
       >
-        <div style={{ position: 'absolute', top: -50, right: -50, width: 200, height: 200, borderRadius: '50%', background: 'rgba(255, 255, 255, 0.1)' }} />
-        <div style={{ position: 'absolute', bottom: -80, right: 100, width: 160, height: 160, borderRadius: '50%', background: 'rgba(255, 255, 255, 0.05)' }} />
-
-        <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: 24 }}>
+        <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: 28 }}>
           <div
             style={{
-              width: 64,
-              height: 64,
-              borderRadius: 16,
-              background: 'rgba(255, 255, 255, 0.2)',
+              width: 68,
+              height: 68,
+              borderRadius: 18,
+              background: 'rgba(255, 255, 255, 0.18)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -430,10 +427,10 @@ export default function CostDeviationInput() {
             <MonitorOutlined style={{ fontSize: 32, color: '#fff' }} />
           </div>
           <div>
-            <Title level={3} style={{ color: '#fff', margin: 0, marginBottom: 8 }}>
+            <Title level={3} style={{ color: '#fff', margin: 0, marginBottom: 10 }}>
               成本偏差监控
             </Title>
-            <Text style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: 15 }}>
+            <Text style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: 15, lineHeight: 1.6 }}>
               AI智能识别项目截图，分析成本偏差，提供调整建议
             </Text>
           </div>
@@ -443,32 +440,32 @@ export default function CostDeviationInput() {
       {/* 截图上传区域 */}
       <Card
         style={{
-          borderRadius: 20,
-          marginBottom: 24,
-          border: '1px solid #f1f5f9',
+          borderRadius: 24,
+          marginBottom: 32,
+          border: '1px solid var(--color-border-light)',
         }}
       >
-        <div style={{ marginBottom: 20 }}>
-          <Title level={4} style={{ marginBottom: 4, fontWeight: 600 }}>
-            <CameraOutlined style={{ marginRight: 8, color: '#8B5CF6' }} />
+        <div style={{ marginBottom: 24 }}>
+          <Title level={4} style={{ marginBottom: 8, fontWeight: 600 }}>
+            <CameraOutlined style={{ marginRight: 10, color: '#8B5CF6' }} />
             上传项目截图
           </Title>
-          <Text type="secondary">请上传以下4类截图，AI将自动识别并提取关键信息</Text>
+          <Text type="secondary" style={{ fontSize: 14 }}>请上传以下4类截图，AI将自动识别并提取关键信息</Text>
         </div>
 
-        <Row gutter={[16, 16]}>
+        <Row gutter={[20, 20]}>
           {screenshotTypes.map((type) => (
             <Col xs={24} md={12} key={type.key}>
               <Card
                 style={{
-                  borderRadius: 16,
-                  border: '1px solid #f1f5f9',
+                  borderRadius: 18,
+                  border: '1px solid var(--color-border-light)',
                   height: '100%',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <span style={{ fontSize: 24 }}>{type.icon}</span>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                    <span style={{ fontSize: 26 }}>{type.icon}</span>
                     <div>
                       <Text strong style={{ fontSize: 14 }}>{type.title}</Text>
                     </div>
@@ -480,7 +477,7 @@ export default function CostDeviationInput() {
                     onClick={() => handleScreenshotUpload(type.key)}
                     disabled={screenshotFiles[type.key].length === 0 || uploading}
                     style={{
-                      borderRadius: 8,
+                      borderRadius: 10,
                       background: type.color,
                       border: 'none',
                     }}
@@ -490,7 +487,7 @@ export default function CostDeviationInput() {
                 </div>
                 <Dragger {...getDraggerProps(type.key)} disabled={uploading}>
                   <p className="ant-upload-drag-icon">
-                    <InboxOutlined style={{ color: type.color, fontSize: 32 }} />
+                    <InboxOutlined style={{ color: type.color, fontSize: 36 }} />
                   </p>
                   <p className="ant-upload-text" style={{ fontSize: 13 }}>
                     点击或拖拽图片到此区域
@@ -506,7 +503,7 @@ export default function CostDeviationInput() {
 
         {/* 上传进度 */}
         {uploading && (
-          <div style={{ marginTop: 20 }}>
+          <div style={{ marginTop: 24 }}>
             <Progress
               percent={uploadProgress}
               status={uploadProgress === 100 ? 'success' : 'active'}
@@ -519,7 +516,7 @@ export default function CostDeviationInput() {
         )}
 
         {/* AI识别按钮 */}
-        <div style={{ marginTop: 20, display: 'flex', justifyContent: 'center' }}>
+        <div style={{ marginTop: 24, display: 'flex', justifyContent: 'center' }}>
           <Button
             type="primary"
             size="large"
@@ -528,8 +525,8 @@ export default function CostDeviationInput() {
             loading={recognizing}
             disabled={!projectId || uploading}
             style={{
-              borderRadius: 12,
-              height: 44,
+              borderRadius: 14,
+              height: 48,
               background: 'linear-gradient(135deg, #8B5CF6 0%, #EC4899 100%)',
               border: 'none',
               fontWeight: 600,
@@ -538,7 +535,7 @@ export default function CostDeviationInput() {
             开始AI识别
           </Button>
           <Tooltip title="AI将识别上传的截图，提取项目名称、合同金额、人力成本等信息">
-            <InfoCircleOutlined style={{ color: '#64748b', marginLeft: 12, alignSelf: 'center' }} />
+            <InfoCircleOutlined style={{ color: '#64748b', marginLeft: 14, alignSelf: 'center' }} />
           </Tooltip>
         </div>
       </Card>
@@ -547,9 +544,9 @@ export default function CostDeviationInput() {
       {recognizing && (
         <Card
           style={{
-            borderRadius: 20,
-            marginBottom: 24,
-            border: '1px solid #f1f5f9',
+            borderRadius: 24,
+            marginBottom: 32,
+            border: '1px solid var(--color-border-light)',
           }}
         >
           <Spin tip="AI正在识别截图内容...">
@@ -561,38 +558,38 @@ export default function CostDeviationInput() {
       {recognitionResult && !recognizing && (
         <Card
           style={{
-            borderRadius: 20,
-            marginBottom: 24,
-            border: '1px solid #f1f5f9',
+            borderRadius: 24,
+            marginBottom: 32,
+            border: '1px solid var(--color-border-light)',
           }}
         >
-          <div style={{ marginBottom: 20 }}>
-            <Title level={4} style={{ marginBottom: 4, fontWeight: 600 }}>
-              <CheckCircleOutlined style={{ marginRight: 8, color: '#10B981' }} />
+          <div style={{ marginBottom: 24 }}>
+            <Title level={4} style={{ marginBottom: 8, fontWeight: 600 }}>
+              <CheckCircleOutlined style={{ marginRight: 10, color: '#10B981' }} />
               AI识别结果
             </Title>
-            <Text type="secondary">以下信息已从截图自动识别提取，如有偏差可手动修正</Text>
+            <Text type="secondary" style={{ fontSize: 14 }}>以下信息已从截图自动识别提取，如有偏差可手动修正</Text>
           </div>
 
           <Card
             style={{
-              marginBottom: 20,
-              borderRadius: 12,
-              background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(52, 211, 153, 0.1) 100%)',
-              border: '1px solid rgba(16, 185, 129, 0.3)',
+              marginBottom: 24,
+              borderRadius: 16,
+              background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(52, 211, 153, 0.08) 100%)',
+              border: '1px solid rgba(16, 185, 129, 0.25)',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
               <CheckCircleOutlined style={{ color: '#10B981', fontSize: 18 }} />
               <Text style={{ color: '#10B981', fontWeight: 500 }}>识别成功，数据已自动填充</Text>
             </div>
           </Card>
 
           <Form form={form} layout="vertical">
-            <Row gutter={24}>
+            <Row gutter={28}>
               <Col xs={24} md={8}>
                 <Form.Item label="项目名称" name="projectName">
-                  <Input placeholder="请输入项目名称" style={{ borderRadius: 8 }} />
+                  <Input placeholder="请输入项目名称" style={{ borderRadius: 10 }} />
                 </Form.Item>
               </Col>
               <Col xs={24} md={8}>
@@ -601,7 +598,7 @@ export default function CostDeviationInput() {
                     placeholder="请输入合同金额"
                     min={0}
                     precision={2}
-                    style={{ width: '100%', borderRadius: 8 }}
+                    style={{ width: '100%', borderRadius: 10 }}
                   />
                 </Form.Item>
               </Col>
@@ -611,7 +608,7 @@ export default function CostDeviationInput() {
                     placeholder="请输入人力成本"
                     min={0}
                     precision={2}
-                    style={{ width: '100%', borderRadius: 8 }}
+                    style={{ width: '100%', borderRadius: 10 }}
                   />
                 </Form.Item>
               </Col>
@@ -623,7 +620,7 @@ export default function CostDeviationInput() {
                 min={0}
                 max={100}
                 precision={1}
-                style={{ width: 300, borderRadius: 8 }}
+                style={{ width: 300, borderRadius: 10 }}
               />
             </Form.Item>
 
@@ -646,17 +643,17 @@ export default function CostDeviationInput() {
       {/* 分析基准配置 */}
       <Card
         style={{
-          borderRadius: 20,
-          marginBottom: 24,
-          border: '1px solid #f1f5f9',
+          borderRadius: 24,
+          marginBottom: 32,
+          border: '1px solid var(--color-border-light)',
         }}
       >
-        <div style={{ marginBottom: 20 }}>
-          <Title level={4} style={{ marginBottom: 4, fontWeight: 600 }}>
-            <SettingOutlined style={{ marginRight: 8, color: '#F59E0B' }} />
+        <div style={{ marginBottom: 24 }}>
+          <Title level={4} style={{ marginBottom: 8, fontWeight: 600 }}>
+            <SettingOutlined style={{ marginRight: 10, color: '#F59E0B' }} />
             分析基准配置
           </Title>
-          <Text type="secondary">选择分析基准模式，用于计算各阶段成本偏差对比</Text>
+          <Text type="secondary" style={{ fontSize: 14 }}>选择分析基准模式，用于计算各阶段成本偏差对比</Text>
         </div>
 
         <Form layout="vertical">
@@ -677,7 +674,7 @@ export default function CostDeviationInput() {
             <Form.Item label="工作量评估表">
               <Dragger {...baselineUploadProps}>
                 <p className="ant-upload-drag-icon">
-                  <InboxOutlined style={{ color: '#F59E0B', fontSize: 32 }} />
+                  <InboxOutlined style={{ color: '#F59E0B', fontSize: 36 }} />
                 </p>
                 <p className="ant-upload-text">点击或拖拽文件到此区域上传</p>
                 <p className="ant-upload-hint">仅支持 Excel 格式的工作量评估表</p>
@@ -687,7 +684,7 @@ export default function CostDeviationInput() {
                 icon={<UploadOutlined />}
                 onClick={handleBaselineUpload}
                 disabled={baselineFileList.length === 0}
-                style={{ marginTop: 12, borderRadius: 8 }}
+                style={{ marginTop: 16, borderRadius: 10 }}
               >
                 上传评估表
               </Button>
@@ -699,17 +696,17 @@ export default function CostDeviationInput() {
             <Form.Item label="阶段比例配置">
               <Card
                 style={{
-                  marginBottom: 16,
-                  borderRadius: 12,
+                  marginBottom: 20,
+                  borderRadius: 14,
                   background: validateStageRatios()
-                    ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(52, 211, 153, 0.1) 100%)'
-                    : 'linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(251, 191, 36, 0.1) 100%)',
+                    ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(52, 211, 153, 0.08) 100%)'
+                    : 'linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, rgba(251, 191, 36, 0.08) 100%)',
                   border: validateStageRatios()
-                    ? '1px solid rgba(16, 185, 129, 0.3)'
-                    : '1px solid rgba(245, 158, 11, 0.3)',
+                    ? '1px solid rgba(16, 185, 129, 0.25)'
+                    : '1px solid rgba(245, 158, 11, 0.25)',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                   {validateStageRatios() ? (
                     <CheckCircleOutlined style={{ color: '#10B981' }} />
                   ) : (
@@ -722,12 +719,12 @@ export default function CostDeviationInput() {
                 </div>
               </Card>
 
-              <Row gutter={[12, 12]}>
+              <Row gutter={[16, 16]}>
                 {stageRatios.map((item, index) => (
                   <Col xs={12} md={8} lg={4} key={item.stage}>
                     <Card
                       size="small"
-                      style={{ borderRadius: 12, textAlign: 'center' }}
+                      style={{ borderRadius: 14, textAlign: 'center' }}
                     >
                       <Text type="secondary" style={{ fontSize: 12 }}>
                         {item.stage}
@@ -742,7 +739,7 @@ export default function CostDeviationInput() {
                         min={0}
                         max={100}
                         precision={0}
-                        style={{ width: '100%', marginTop: 8, borderRadius: 8 }}
+                        style={{ width: '100%', marginTop: 10, borderRadius: 10 }}
                         addonAfter="%"
                       />
                     </Card>
@@ -758,7 +755,7 @@ export default function CostDeviationInput() {
               <span>
                 预期利润空间(%)
                 <Tooltip title="预留的利润空间比例，用于计算合理成本消耗">
-                  <InfoCircleOutlined style={{ color: '#64748b', marginLeft: 4 }} />
+                  <InfoCircleOutlined style={{ color: '#64748b', marginLeft: 6 }} />
                 </Tooltip>
               </span>
             }
@@ -769,7 +766,7 @@ export default function CostDeviationInput() {
               min={0}
               max={50}
               precision={1}
-              style={{ width: 200, borderRadius: 8 }}
+              style={{ width: 200, borderRadius: 10 }}
               addonAfter="%"
             />
           </Form.Item>
@@ -779,15 +776,15 @@ export default function CostDeviationInput() {
       {/* 操作按钮 */}
       <Card
         style={{
-          borderRadius: 16,
-          border: '1px solid #f1f5f9',
+          borderRadius: 20,
+          border: '1px solid var(--color-border-light)',
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Button
             size="large"
             onClick={() => navigate('/dashboard')}
-            style={{ borderRadius: 12, height: 44 }}
+            style={{ borderRadius: 14, height: 48 }}
           >
             返回首页
           </Button>
@@ -799,15 +796,15 @@ export default function CostDeviationInput() {
             loading={analyzing}
             disabled={!recognitionResult || !validateStageRatios()}
             style={{
-              borderRadius: 12,
-              height: 44,
+              borderRadius: 14,
+              height: 48,
               background: 'linear-gradient(135deg, #8B5CF6 0%, #EC4899 100%)',
               border: 'none',
               fontWeight: 600,
             }}
           >
             开始分析
-            <ArrowRightOutlined style={{ marginLeft: 8 }} />
+            <ArrowRightOutlined style={{ marginLeft: 10 }} />
           </Button>
         </div>
       </Card>

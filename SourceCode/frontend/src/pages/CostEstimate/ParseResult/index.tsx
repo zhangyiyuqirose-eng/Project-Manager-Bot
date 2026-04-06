@@ -11,7 +11,6 @@ import {
   Tag,
   Progress,
   Empty,
-  Tooltip,
   Row,
   Col,
   Statistic,
@@ -24,7 +23,6 @@ import {
   ArrowLeftOutlined,
   ArrowRightOutlined,
   CalculatorOutlined,
-  CheckCircleOutlined,
   ThunderboltOutlined,
   ClusterOutlined,
   RocketOutlined,
@@ -534,35 +532,32 @@ export default function CostEstimateParseResult() {
       {/* 步骤条 */}
       <Card
         style={{
-          borderRadius: 16,
-          marginBottom: 24,
-          border: '1px solid #f1f5f9',
+          borderRadius: 20,
+          marginBottom: 32,
+          border: '1px solid var(--color-border-light)',
         }}
       >
-        <Steps current={currentStep} items={stepItems} style={{ marginBottom: 8 }} />
+        <Steps current={currentStep} items={stepItems} />
       </Card>
 
       {/* 功能介绍区域 */}
       <div
         style={{
           background: 'linear-gradient(135deg, #F59E0B 0%, #FBBF24 100%)',
-          borderRadius: 20,
-          padding: '32px 40px',
-          marginBottom: 24,
+          borderRadius: 24,
+          padding: '48px 48px',
+          marginBottom: 32,
           position: 'relative',
           overflow: 'hidden',
         }}
       >
-        <div style={{ position: 'absolute', top: -50, right: -50, width: 200, height: 200, borderRadius: '50%', background: 'rgba(255, 255, 255, 0.1)' }} />
-        <div style={{ position: 'absolute', bottom: -80, right: 100, width: 160, height: 160, borderRadius: '50%', background: 'rgba(255, 255, 255, 0.05)' }} />
-
-        <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: 24 }}>
+        <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: 28 }}>
           <div
             style={{
-              width: 64,
-              height: 64,
-              borderRadius: 16,
-              background: 'rgba(255, 255, 255, 0.2)',
+              width: 68,
+              height: 68,
+              borderRadius: 18,
+              background: 'rgba(255, 255, 255, 0.18)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -571,18 +566,18 @@ export default function CostEstimateParseResult() {
             <FileSearchOutlined style={{ fontSize: 32, color: '#fff' }} />
           </div>
           <div>
-            <Title level={3} style={{ color: '#fff', margin: 0, marginBottom: 8 }}>
+            <Title level={3} style={{ color: '#fff', margin: 0, marginBottom: 10 }}>
               文档解析结果
             </Title>
-            <Text style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: 15 }}>
+            <Text style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: 15, lineHeight: 1.6 }}>
               查看AI解析的功能模块和功能点，每个功能点包含4个维度的评估结果
             </Text>
           </div>
         </div>
       </div>
 
-      {/* 维度说明 */}
-      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+      {/* 维度说明 - 更大间距 */}
+      <Row gutter={[20, 20]} style={{ marginBottom: 32 }}>
         <Col xs={24} sm={12} lg={6}>
           <DimensionCard
             title="复杂度"
@@ -625,12 +620,12 @@ export default function CostEstimateParseResult() {
       {parseResult && parseResult.modules.length > 0 && (
         <Card
           style={{
-            borderRadius: 20,
-            marginBottom: 24,
-            border: '1px solid #f1f5f9',
+            borderRadius: 24,
+            marginBottom: 32,
+            border: '1px solid var(--color-border-light)',
           }}
         >
-          <Row gutter={[24, 16]}>
+          <Row gutter={[32, 20]}>
             <Col xs={12} sm={6}>
               <Statistic
                 title="项目名称"
@@ -668,17 +663,17 @@ export default function CostEstimateParseResult() {
       {/* 解析结果表格 */}
       <Card
         style={{
-          borderRadius: 20,
-          marginBottom: 24,
-          border: '1px solid #f1f5f9',
+          borderRadius: 24,
+          marginBottom: 32,
+          border: '1px solid var(--color-border-light)',
         }}
       >
-        <div style={{ marginBottom: 20 }}>
-          <Title level={4} style={{ marginBottom: 4, fontWeight: 600 }}>
-            <FileSearchOutlined style={{ marginRight: 8, color: '#F59E0B' }} />
+        <div style={{ marginBottom: 24 }}>
+          <Title level={4} style={{ marginBottom: 8, fontWeight: 600 }}>
+            <FileSearchOutlined style={{ marginRight: 10, color: '#F59E0B' }} />
             功能模块分析
           </Title>
-          <Text type="secondary">展开模块查看各功能点的详细评估结果</Text>
+          <Text type="secondary" style={{ fontSize: 14 }}>展开模块查看各功能点的详细评估结果</Text>
         </div>
 
         {parseResult && parseResult.modules.length > 0 ? (
@@ -689,7 +684,7 @@ export default function CostEstimateParseResult() {
             pagination={false}
             expandable={{
               expandedRowRender: (record) => (
-                <div style={{ margin: -8, padding: 16, background: '#fafafa' }}>
+                <div style={{ margin: -8, padding: 20, background: 'var(--color-bg-secondary)' }}>
                   <Table
                     columns={functionColumns}
                     dataSource={record.functions}
@@ -703,7 +698,7 @@ export default function CostEstimateParseResult() {
             }}
           />
         ) : (
-          <div style={{ textAlign: 'center', padding: 48 }}>
+          <div style={{ textAlign: 'center', padding: 64 }}>
             <Empty
               description="暂无解析结果"
               image={Empty.PRESENTED_IMAGE_SIMPLE}
@@ -714,7 +709,8 @@ export default function CostEstimateParseResult() {
                 onClick={handleParse}
                 loading={parsing}
                 style={{
-                  borderRadius: 12,
+                  borderRadius: 14,
+                  height: 48,
                   background: 'linear-gradient(135deg, #F59E0B 0%, #FBBF24 100%)',
                   border: 'none'
                 }}
@@ -729,27 +725,27 @@ export default function CostEstimateParseResult() {
       {/* 操作按钮 */}
       <Card
         style={{
-          borderRadius: 16,
-          border: '1px solid #f1f5f9',
+          borderRadius: 20,
+          border: '1px solid var(--color-border-light)',
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Button
             size="large"
             onClick={() => navigate(`/cost-estimate/config?projectId=${projectId}`)}
-            style={{ borderRadius: 12, height: 44 }}
+            style={{ borderRadius: 14, height: 48 }}
           >
             <ArrowLeftOutlined style={{ marginRight: 8 }} />
             上一步：参数配置
           </Button>
-          <div style={{ display: 'flex', gap: 12 }}>
+          <div style={{ display: 'flex', gap: 16 }}>
             {(!parseResult || parseResult.modules.length === 0) && (
               <Button
                 size="large"
                 icon={<CalculatorOutlined />}
                 onClick={handleParse}
                 loading={parsing}
-                style={{ borderRadius: 12, height: 44 }}
+                style={{ borderRadius: 14, height: 48 }}
               >
                 {parsing ? '正在解析...' : '解析文档'}
               </Button>
@@ -761,8 +757,8 @@ export default function CostEstimateParseResult() {
               onClick={handleCalculate}
               loading={calculating}
               style={{
-                borderRadius: 12,
-                height: 44,
+                borderRadius: 14,
+                height: 48,
                 background: parseResult && parseResult.modules.length > 0
                   ? 'linear-gradient(135deg, #3B82F6 0%, #8B5CF6 100%)'
                   : '#e2e8f0',
@@ -771,7 +767,7 @@ export default function CostEstimateParseResult() {
               }}
             >
               {calculating ? '正在计算...' : '开始计算'}
-              {!calculating && <ArrowRightOutlined style={{ marginLeft: 8 }} />}
+              {!calculating && <ArrowRightOutlined style={{ marginLeft: 10 }} />}
             </Button>
           </div>
         </div>

@@ -128,24 +128,24 @@ interface ConfigCardHeaderProps {
 
 function ConfigCardHeader({ title, subtitle, icon, color, onAdd }: ConfigCardHeaderProps) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
         <div
           style={{
-            width: 48,
-            height: 48,
-            borderRadius: 12,
-            background: `${color}15`,
+            width: 52,
+            height: 52,
+            borderRadius: 14,
+            background: `${color}12`,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
           }}
         >
-          <span style={{ fontSize: 24, color }}>{icon}</span>
+          <span style={{ fontSize: 26, color }}>{icon}</span>
         </div>
         <div>
           <Title level={5} style={{ margin: 0, fontWeight: 600 }}>{title}</Title>
-          <Text type="secondary" style={{ fontSize: 13 }}>{subtitle}</Text>
+          <Text type="secondary" style={{ fontSize: 13, marginTop: 4 }}>{subtitle}</Text>
         </div>
       </div>
       {onAdd && (
@@ -153,7 +153,7 @@ function ConfigCardHeader({ title, subtitle, icon, color, onAdd }: ConfigCardHea
           type="dashed"
           icon={<PlusOutlined />}
           onClick={onAdd}
-          style={{ borderRadius: 8 }}
+          style={{ borderRadius: 10 }}
         >
           新增
         </Button>
@@ -169,7 +169,6 @@ export default function CostEstimateConfig() {
 
   const [currentStep, setCurrentStep] = useState(1)
   const [loading, setLoading] = useState(false)
-  const [calculating, setCalculating] = useState(false)
   const [saving, setSaving] = useState(false)
 
   // 配置数据
@@ -730,35 +729,32 @@ export default function CostEstimateConfig() {
       {/* 步骤条 */}
       <Card
         style={{
-          borderRadius: 16,
-          marginBottom: 24,
-          border: '1px solid #f1f5f9',
+          borderRadius: 20,
+          marginBottom: 32,
+          border: '1px solid var(--color-border-light)',
         }}
       >
-        <Steps current={currentStep} items={stepItems} style={{ marginBottom: 8 }} />
+        <Steps current={currentStep} items={stepItems} />
       </Card>
 
       {/* 功能介绍区域 */}
       <div
         style={{
           background: 'linear-gradient(135deg, #10B981 0%, #34D399 100%)',
-          borderRadius: 20,
-          padding: '32px 40px',
-          marginBottom: 24,
+          borderRadius: 24,
+          padding: '48px 48px',
+          marginBottom: 32,
           position: 'relative',
           overflow: 'hidden',
         }}
       >
-        <div style={{ position: 'absolute', top: -50, right: -50, width: 200, height: 200, borderRadius: '50%', background: 'rgba(255, 255, 255, 0.1)' }} />
-        <div style={{ position: 'absolute', bottom: -80, right: 100, width: 160, height: 160, borderRadius: '50%', background: 'rgba(255, 255, 255, 0.05)' }} />
-
-        <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: 24 }}>
+        <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: 28 }}>
           <div
             style={{
-              width: 64,
-              height: 64,
-              borderRadius: 16,
-              background: 'rgba(255, 255, 255, 0.2)',
+              width: 68,
+              height: 68,
+              borderRadius: 18,
+              background: 'rgba(255, 255, 255, 0.18)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -767,24 +763,24 @@ export default function CostEstimateConfig() {
             <SettingOutlined style={{ fontSize: 32, color: '#fff' }} />
           </div>
           <div>
-            <Title level={3} style={{ color: '#fff', margin: 0, marginBottom: 8 }}>
+            <Title level={3} style={{ color: '#fff', margin: 0, marginBottom: 10 }}>
               参数配置
             </Title>
-            <Text style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: 15 }}>
+            <Text style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: 15, lineHeight: 1.6 }}>
               根据项目实际情况调整计算参数，获得更精准的成本预估结果
             </Text>
           </div>
         </div>
       </div>
 
-      {/* 配置卡片 */}
+      {/* 配置卡片 - 更大间距 */}
       <Row gutter={[24, 24]}>
         {/* 复杂度基准配置 */}
         <Col xs={24} lg={12}>
           <Card
             style={{
-              borderRadius: 20,
-              border: '1px solid #f1f5f9',
+              borderRadius: 24,
+              border: '1px solid var(--color-border-light)',
               height: '100%',
             }}
           >
@@ -809,8 +805,8 @@ export default function CostEstimateConfig() {
         <Col xs={24} lg={12}>
           <Card
             style={{
-              borderRadius: 20,
-              border: '1px solid #f1f5f9',
+              borderRadius: 24,
+              border: '1px solid var(--color-border-light)',
               height: '100%',
             }}
           >
@@ -835,8 +831,8 @@ export default function CostEstimateConfig() {
         <Col xs={24} lg={12}>
           <Card
             style={{
-              borderRadius: 20,
-              border: '1px solid #f1f5f9',
+              borderRadius: 24,
+              border: '1px solid var(--color-border-light)',
               height: '100%',
             }}
           >
@@ -861,8 +857,8 @@ export default function CostEstimateConfig() {
         <Col xs={24} lg={12}>
           <Card
             style={{
-              borderRadius: 20,
-              border: '1px solid #f1f5f9',
+              borderRadius: 24,
+              border: '1px solid var(--color-border-light)',
               height: '100%',
             }}
           >
@@ -887,8 +883,8 @@ export default function CostEstimateConfig() {
         <Col xs={24} lg={12}>
           <Card
             style={{
-              borderRadius: 20,
-              border: '1px solid #f1f5f9',
+              borderRadius: 24,
+              border: '1px solid var(--color-border-light)',
               height: '100%',
             }}
           >
@@ -913,8 +909,8 @@ export default function CostEstimateConfig() {
         <Col xs={24} lg={12}>
           <Card
             style={{
-              borderRadius: 20,
-              border: '1px solid #f1f5f9',
+              borderRadius: 24,
+              border: '1px solid var(--color-border-light)',
               height: '100%',
             }}
           >
@@ -924,7 +920,7 @@ export default function CostEstimateConfig() {
               icon={<SettingOutlined />}
               color="#64748b"
             />
-            <div style={{ padding: '16px 0' }}>
+            <div style={{ padding: '20px 0' }}>
               <Form layout="inline">
                 <Form.Item label="管理系数" style={{ marginBottom: 0 }}>
                   <InputNumber
@@ -934,14 +930,14 @@ export default function CostEstimateConfig() {
                     precision={2}
                     value={managementCoefficient}
                     onChange={(val) => setManagementCoefficient(val || 0.15)}
-                    style={{ width: 150, borderRadius: 8 }}
+                    style={{ width: 150, borderRadius: 10 }}
                   />
                 </Form.Item>
                 <Tooltip title="管理系数用于计算项目管理成本，建议范围 0.10 - 0.20">
-                  <InfoCircleOutlined style={{ color: '#64748b', marginLeft: 8 }} />
+                  <InfoCircleOutlined style={{ color: '#64748b', marginLeft: 10 }} />
                 </Tooltip>
               </Form>
-              <Text type="secondary" style={{ marginTop: 12, display: 'block' }}>
+              <Text type="secondary" style={{ marginTop: 16, display: 'block', fontSize: 13 }}>
                 建议范围: 0.10 - 0.20，当前值: {managementCoefficient.toFixed(2)}
               </Text>
             </div>
@@ -952,27 +948,27 @@ export default function CostEstimateConfig() {
       {/* 操作按钮 */}
       <Card
         style={{
-          borderRadius: 16,
-          marginTop: 24,
-          border: '1px solid #f1f5f9',
+          borderRadius: 20,
+          marginTop: 32,
+          border: '1px solid var(--color-border-light)',
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Button
             size="large"
             onClick={() => navigate('/cost-estimate/upload')}
-            style={{ borderRadius: 12, height: 44 }}
+            style={{ borderRadius: 14, height: 48 }}
           >
             <ArrowLeftOutlined style={{ marginRight: 8 }} />
             上一步：文件上传
           </Button>
-          <div style={{ display: 'flex', gap: 12 }}>
+          <div style={{ display: 'flex', gap: 16 }}>
             <Button
               size="large"
               icon={<SaveOutlined />}
               onClick={handleSaveConfig}
               loading={saving}
-              style={{ borderRadius: 12, height: 44 }}
+              style={{ borderRadius: 14, height: 48 }}
             >
               保存参数模板
             </Button>
@@ -983,8 +979,8 @@ export default function CostEstimateConfig() {
               onClick={handleNext}
               loading={saving}
               style={{
-                borderRadius: 12,
-                height: 44,
+                borderRadius: 14,
+                height: 48,
                 background: 'linear-gradient(135deg, #3B82F6 0%, #8B5CF6 100%)',
                 border: 'none',
                 fontWeight: 600,

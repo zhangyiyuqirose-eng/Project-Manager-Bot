@@ -67,7 +67,7 @@ const stepItems = [
   },
 ]
 
-// 统计卡片组件
+// 统计卡片组件 - 简约现代风格
 interface StatCardProps {
   title: string
   value: number | string
@@ -82,8 +82,8 @@ function StatCard({ title, value, suffix, precision, icon, color, gradient }: St
   return (
     <Card
       style={{
-        borderRadius: 16,
-        border: '1px solid #f1f5f9',
+        borderRadius: 20,
+        border: '1px solid var(--color-border-light)',
         height: '100%',
         overflow: 'hidden',
       }}
@@ -91,24 +91,24 @@ function StatCard({ title, value, suffix, precision, icon, color, gradient }: St
       <div
         style={{
           background: gradient,
-          padding: '24px 20px',
-          borderRadius: 12,
-          marginBottom: 16,
+          padding: '28px 24px',
+          borderRadius: 16,
+          marginBottom: 20,
         }}
       >
         <div
           style={{
-            width: 48,
-            height: 48,
-            borderRadius: 12,
+            width: 52,
+            height: 52,
+            borderRadius: 14,
             background: 'rgba(255, 255, 255, 0.2)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            marginBottom: 12,
+            marginBottom: 14,
           }}
         >
-          <span style={{ fontSize: 24, color: '#fff' }}>{icon}</span>
+          <span style={{ fontSize: 26, color: '#fff' }}>{icon}</span>
         </div>
         <Text style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: 13 }}>{title}</Text>
       </div>
@@ -116,7 +116,7 @@ function StatCard({ title, value, suffix, precision, icon, color, gradient }: St
         <Text
           strong
           style={{
-            fontSize: 32,
+            fontSize: 34,
             color,
             fontWeight: 700,
           }}
@@ -124,7 +124,7 @@ function StatCard({ title, value, suffix, precision, icon, color, gradient }: St
           {typeof value === 'number' && precision ? value.toFixed(precision) : value}
         </Text>
         {suffix && (
-          <Text type="secondary" style={{ fontSize: 14, marginLeft: 4 }}>
+          <Text type="secondary" style={{ fontSize: 14, marginLeft: 6 }}>
             {suffix}
           </Text>
         )}
@@ -332,7 +332,7 @@ export default function CostEstimateResult() {
           fill: '#6B7280',
           fontWeight: 600,
         },
-        formatter: (text: string, item: any) => {
+        formatter: (_text: string, item: any) => {
           const total = result?.teamBreakdown?.reduce((sum: number, i: any) => sum + i.workdays, 0) || 1
           const dataItem = result?.teamBreakdown?.find((i: any) => i.team === item.name)
           const percent = dataItem ? ((dataItem.workdays / total) * 100).toFixed(1) : '0'
@@ -369,7 +369,7 @@ export default function CostEstimateResult() {
     // 悬浮状态样式
     state: {
       active: {
-        style: (element: any) => {
+        style: (_element: any) => {
           return {
             lineWidth: 3,
             stroke: '#fff',
@@ -658,35 +658,32 @@ export default function CostEstimateResult() {
       {/* 步骤条 */}
       <Card
         style={{
-          borderRadius: 16,
-          marginBottom: 24,
-          border: '1px solid #f1f5f9',
+          borderRadius: 20,
+          marginBottom: 32,
+          border: '1px solid var(--color-border-light)',
         }}
       >
-        <Steps current={currentStep} items={stepItems} style={{ marginBottom: 8 }} />
+        <Steps current={currentStep} items={stepItems} />
       </Card>
 
       {/* 功能介绍区域 */}
       <div
         style={{
           background: 'linear-gradient(135deg, #8B5CF6 0%, #EC4899 100%)',
-          borderRadius: 20,
-          padding: '32px 40px',
-          marginBottom: 24,
+          borderRadius: 24,
+          padding: '48px 48px',
+          marginBottom: 32,
           position: 'relative',
           overflow: 'hidden',
         }}
       >
-        <div style={{ position: 'absolute', top: -50, right: -50, width: 200, height: 200, borderRadius: '50%', background: 'rgba(255, 255, 255, 0.1)' }} />
-        <div style={{ position: 'absolute', bottom: -80, right: 100, width: 160, height: 160, borderRadius: '50%', background: 'rgba(255, 255, 255, 0.05)' }} />
-
-        <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: 24 }}>
+        <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: 28 }}>
           <div
             style={{
-              width: 64,
-              height: 64,
-              borderRadius: 16,
-              background: 'rgba(255, 255, 255, 0.2)',
+              width: 68,
+              height: 68,
+              borderRadius: 18,
+              background: 'rgba(255, 255, 255, 0.18)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -695,10 +692,10 @@ export default function CostEstimateResult() {
             <BarChartOutlined style={{ fontSize: 32, color: '#fff' }} />
           </div>
           <div>
-            <Title level={3} style={{ color: '#fff', margin: 0, marginBottom: 8 }}>
+            <Title level={3} style={{ color: '#fff', margin: 0, marginBottom: 10 }}>
               成本预估结果
             </Title>
-            <Text style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: 15 }}>
+            <Text style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: 15, lineHeight: 1.6 }}>
               查看详细的成本预估结果，支持多维度分析和导出报告
             </Text>
           </div>
@@ -706,7 +703,7 @@ export default function CostEstimateResult() {
       </div>
 
       {/* 核心指标卡片 */}
-      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+      <Row gutter={[20, 20]} style={{ marginBottom: 32 }}>
         <Col xs={12} sm={6}>
           <StatCard
             title="总人天"
@@ -755,8 +752,8 @@ export default function CostEstimateResult() {
       {/* Tab切换 */}
       <Card
         style={{
-          borderRadius: 20,
-          border: '1px solid #f1f5f9',
+          borderRadius: 24,
+          border: '1px solid var(--color-border-light)',
         }}
       >
         <Tabs
@@ -774,12 +771,12 @@ export default function CostEstimateResult() {
                     <Col xs={24} lg={12}>
                       <Card
                         title={
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                             <TeamOutlined style={{ color: '#3B82F6' }} />
                             <Text strong>团队工作量分布</Text>
                           </div>
                         }
-                        style={{ borderRadius: 16, border: '1px solid #f1f5f9' }}
+                        style={{ borderRadius: 18, border: '1px solid var(--color-border-light)' }}
                       >
                         <Pie {...teamPieConfig} />
                       </Card>
@@ -787,12 +784,12 @@ export default function CostEstimateResult() {
                     <Col xs={24} lg={12}>
                       <Card
                         title={
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                             <BarChartOutlined style={{ color: '#8B5CF6' }} />
                             <Text strong>各阶段工作量</Text>
                           </div>
                         }
-                        style={{ borderRadius: 16, border: '1px solid #f1f5f9' }}
+                        style={{ borderRadius: 18, border: '1px solid var(--color-border-light)' }}
                       >
                         <Column {...stageColumnConfig} />
                       </Card>
@@ -810,12 +807,12 @@ export default function CostEstimateResult() {
                   {/* 阶段详细分解表 */}
                   <Card
                     title={
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <RocketOutlined style={{ color: '#3B82F6' }} />
                         <Text strong>阶段详细分解</Text>
                       </div>
                     }
-                    style={{ borderRadius: 16, marginBottom: 24, border: '1px solid #f1f5f9' }}
+                    style={{ borderRadius: 18, marginBottom: 28, border: '1px solid var(--color-border-light)' }}
                   >
                     <Table
                       columns={stageColumns}
@@ -850,12 +847,12 @@ export default function CostEstimateResult() {
                   {/* 功能模块详细分析表 */}
                   <Card
                     title={
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <ThunderboltOutlined style={{ color: '#8B5CF6' }} />
                         <Text strong>功能模块详细分析</Text>
                       </div>
                     }
-                    style={{ borderRadius: 16, border: '1px solid #f1f5f9' }}
+                    style={{ borderRadius: 18, border: '1px solid var(--color-border-light)' }}
                   >
                     <Table
                       columns={moduleColumns}
@@ -880,37 +877,37 @@ export default function CostEstimateResult() {
                   {/* 占比合规校验结果 */}
                   <Card
                     title={
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <CheckCircleOutlined style={{ color: '#10B981' }} />
                         <Text strong>占比合规校验结果</Text>
                       </div>
                     }
-                    style={{ borderRadius: 16, marginBottom: 24, border: '1px solid #f1f5f9' }}
+                    style={{ borderRadius: 18, marginBottom: 28, border: '1px solid var(--color-border-light)' }}
                   >
-                    <Row gutter={[16, 16]}>
+                    <Row gutter={[20, 20]}>
                       {complianceChecks.map((check) => (
                         <Col xs={24} sm={12} md={8} key={check.stage}>
                           <Card
                             size="small"
                             style={{
-                              borderRadius: 12,
-                              border: check.isCompliant ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(239, 68, 68, 0.3)',
+                              borderRadius: 14,
+                              border: check.isCompliant ? '1px solid rgba(16, 185, 129, 0.25)' : '1px solid rgba(239, 68, 68, 0.25)',
                               background: check.isCompliant
-                                ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(52, 211, 153, 0.1) 100%)'
-                                : 'linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(248, 113, 113, 0.1) 100%)',
+                                ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(52, 211, 153, 0.08) 100%)'
+                                : 'linear-gradient(135deg, rgba(239, 68, 68, 0.08) 0%, rgba(248, 113, 113, 0.08) 100%)',
                             }}
                           >
-                            <div style={{ marginBottom: 12 }}>
+                            <div style={{ marginBottom: 14 }}>
                               <Text strong style={{ fontSize: 14 }}>{check.stage}</Text>
                             </div>
-                            <div style={{ marginBottom: 8 }}>
+                            <div style={{ marginBottom: 10 }}>
                               <Text type="secondary" style={{ fontSize: 12 }}>实际占比</Text>
                               <br />
                               <Text strong style={{ color: '#0f172a' }}>
                                 {(check.actualRatio * 100).toFixed(1)}%
                               </Text>
                             </div>
-                            <div style={{ marginBottom: 8 }}>
+                            <div style={{ marginBottom: 10 }}>
                               <Text type="secondary" style={{ fontSize: 12 }}>预期范围</Text>
                               <br />
                               <Text style={{ color: '#64748b' }}>
@@ -922,7 +919,7 @@ export default function CostEstimateResult() {
                                 <Tag
                                   icon={<CheckCircleOutlined />}
                                   style={{
-                                    borderRadius: 8,
+                                    borderRadius: 10,
                                     background: '#10B981',
                                     color: '#fff',
                                     border: 'none',
@@ -934,7 +931,7 @@ export default function CostEstimateResult() {
                                 <Tag
                                   icon={<ExclamationCircleOutlined />}
                                   style={{
-                                    borderRadius: 8,
+                                    borderRadius: 10,
                                     background: '#EF4444',
                                     color: '#fff',
                                     border: 'none',
@@ -952,17 +949,17 @@ export default function CostEstimateResult() {
                     {/* 合规汇总 */}
                     <Card
                       style={{
-                        marginTop: 16,
-                        borderRadius: 12,
+                        marginTop: 20,
+                        borderRadius: 14,
                         background: complianceChecks.every((c) => c.isCompliant)
-                          ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(52, 211, 153, 0.1) 100%)'
-                          : 'linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(251, 191, 36, 0.1) 100%)',
+                          ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(52, 211, 153, 0.08) 100%)'
+                          : 'linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, rgba(251, 191, 36, 0.08) 100%)',
                         border: complianceChecks.every((c) => c.isCompliant)
-                          ? '1px solid rgba(16, 185, 129, 0.3)'
-                          : '1px solid rgba(245, 158, 11, 0.3)',
+                          ? '1px solid rgba(16, 185, 129, 0.25)'
+                          : '1px solid rgba(245, 158, 11, 0.25)',
                       }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                         {complianceChecks.every((c) => c.isCompliant) ? (
                           <CheckCircleOutlined style={{ color: '#10B981', fontSize: 20 }} />
                         ) : (
@@ -980,12 +977,12 @@ export default function CostEstimateResult() {
                   {/* 计算轨迹展示 */}
                   <Card
                     title={
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <FileTextOutlined style={{ color: '#64748b' }} />
                         <Text strong>计算轨迹</Text>
                       </div>
                     }
-                    style={{ borderRadius: 16, border: '1px solid #f1f5f9' }}
+                    style={{ borderRadius: 18, border: '1px solid var(--color-border-light)' }}
                   >
                     <Table
                       columns={traceColumns}
@@ -1008,16 +1005,16 @@ export default function CostEstimateResult() {
       {/* 操作按钮 */}
       <Card
         style={{
-          borderRadius: 16,
-          marginTop: 24,
-          border: '1px solid #f1f5f9',
+          borderRadius: 20,
+          marginTop: 32,
+          border: '1px solid var(--color-border-light)',
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Button
             size="large"
             onClick={() => navigate(`/cost-estimate/parse-result?projectId=${projectId}`)}
-            style={{ borderRadius: 12, height: 44 }}
+            style={{ borderRadius: 14, height: 48 }}
           >
             <ArrowLeftOutlined style={{ marginRight: 8 }} />
             上一步：解析结果
@@ -1029,7 +1026,7 @@ export default function CostEstimateResult() {
                 icon={<ReloadOutlined />}
                 onClick={handleRecalculate}
                 loading={recalculating}
-                style={{ borderRadius: 12, height: 44 }}
+                style={{ borderRadius: 14, height: 48 }}
               >
                 重新计算
               </Button>
@@ -1041,8 +1038,8 @@ export default function CostEstimateResult() {
               onClick={handleExportExcel}
               loading={exporting}
               style={{
-                borderRadius: 12,
-                height: 44,
+                borderRadius: 14,
+                height: 48,
                 background: 'linear-gradient(135deg, #10B981 0%, #34D399 100%)',
                 border: 'none',
                 fontWeight: 600,

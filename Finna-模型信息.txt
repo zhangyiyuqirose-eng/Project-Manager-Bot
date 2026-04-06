@@ -1,0 +1,10 @@
+﻿模型接口信息如下，请更新：
+API_URL = 'https://www.finna.com.cn/v1/chat/completions'
+LLM_MODEL   = 'qwq-32b'
+API_KEY     = 'app-PvoiFWuSXcN4kwCBuplgOnnC'
+
+MODEL   = 'Qwen/Qwen3-Omni-30B-A3B-Thinking'
+API_KEY     = 'app-62bOAQbVfVSsdEgxBnLUu1aT'
+
+LLM_MODEL   = 'qwq-32b'
+API_KEY     = 'app-PvoiFWuSXcN4kwCBuplgOnnC'

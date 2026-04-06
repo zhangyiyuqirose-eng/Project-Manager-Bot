@@ -55,16 +55,16 @@ export default function Exception() {
         justifyContent: 'center',
         alignItems: 'center',
         minHeight: '100vh',
-        background: '#f0f2f5',
+        background: 'var(--color-bg-secondary)',
       }}
     >
       <Result
         icon={config.icon}
         status={config.status}
-        title={config.title}
-        subTitle={config.subTitle}
+        title={<span style={{ fontSize: 24, fontWeight: 600 }}>{config.title}</span>}
+        subTitle={<span style={{ fontSize: 15, color: 'var(--color-text-secondary)' }}>{config.subTitle}</span>}
         extra={
-          <Button type="primary" size="large" onClick={handleBackHome}>
+          <Button type="primary" size="large" onClick={handleBackHome} style={{ borderRadius: 12, height: 48 }}>
             返回首页
           </Button>
         }

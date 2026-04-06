@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Form, Input, Button, Card, message } from 'antd'
+import { Form, Input, Button, Card, message, Typography } from 'antd'
 import { UserOutlined, LockOutlined } from '@ant-design/icons'
 import { authApi } from '@/api'
 import { useUserStore } from '@/store/userStore'
 import type { AxiosError } from 'axios'
+
+const { Title, Text } = Typography
 
 interface LoginForm {
   username: string
@@ -71,15 +73,23 @@ export default function Login() {
     >
       <Card
         style={{
-          width: 400,
-          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+          width: 440,
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.12)',
+          borderRadius: 24,
+          border: 'none',
         }}
-        title={
-          <div style={{ textAlign: 'center', fontSize: 20, fontWeight: 600 }}>
-            数字员工成本管理系统
-          </div>
-        }
+        styles={{
+          body: { padding: '48px 40px' }
+        }}
       >
+        <div style={{ textAlign: 'center', marginBottom: 40 }}>
+          <Title level={3} style={{ margin: 0, fontWeight: 700 }}>
+            数字员工成本管理系统
+          </Title>
+          <Text type="secondary" style={{ fontSize: 14, marginTop: 8, display: 'block' }}>
+            请登录您的账号
+          </Text>
+        </div>
         <Form
           name="login"
           onFinish={handleSubmit}
@@ -94,6 +104,7 @@ export default function Login() {
               prefix={<UserOutlined />}
               placeholder="用户名"
               autoComplete="username"
+              style={{ borderRadius: 12, height: 48 }}
             />
           </Form.Item>
 
@@ -105,6 +116,7 @@ export default function Login() {
               prefix={<LockOutlined />}
               placeholder="密码"
               autoComplete="current-password"
+              style={{ borderRadius: 12, height: 48 }}
             />
           </Form.Item>
 
@@ -113,11 +125,12 @@ export default function Login() {
               style={{
                 color: '#ff4d4f',
                 textAlign: 'center',
-                marginBottom: 16,
-                padding: '8px 12px',
+                marginBottom: 20,
+                padding: '12px 16px',
                 background: '#fff2f0',
                 border: '1px solid #ffccc7',
-                borderRadius: 4,
+                borderRadius: 12,
+                fontSize: 14,
               }}
             >
               {errorMsg}
@@ -130,6 +143,14 @@ export default function Login() {
               htmlType="submit"
               loading={loading}
               block
+              style={{
+                borderRadius: 12,
+                height: 48,
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                border: 'none',
+                fontWeight: 600,
+                fontSize: 15,
+              }}
             >
               登录
             </Button>
