@@ -1,0 +1,1810 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>项目成本估算监控系统</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --fs-2xs:11px;
+  --fs-xs:12px;
+  --fs-sm:13px;
+  --fs-base:14px;
+  --fs-md:15px;
+  --fs-lg:18px;
+  --fs-xl:20px;
+  --lh-tight:1.25;
+  --lh-base:1.55;
+}
+body{
+  font-family:system-ui,-apple-system,"Segoe UI","Microsoft YaHei","PingFang SC","Hiragino Sans GB","Noto Sans CJK SC",Arial,sans-serif;
+  font-size:var(--fs-base);
+  line-height:var(--lh-base);
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+  text-rendering:optimizeLegibility;
+  background:#f0f4f8;
+  color:#1a202c;
+  min-height:100vh
+}
+
+/* ── 顶栏 ── */
+.header{background:linear-gradient(135deg,#0b2f8a 0%,#1d4ed8 100%);color:#fff;padding:18px 32px;display:flex;align-items:center;gap:16px;box-shadow:0 10px 26px rgba(29,78,216,.22),0 3px 10px rgba(0,0,0,.12)}
+.header-icon{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.24);box-shadow:inset 0 1px 0 rgba(255,255,255,.18)}
+.header-icon svg{width:22px;height:22px;display:block;fill:currentColor}
+.header h1{font-size:var(--fs-xl);font-weight:800;letter-spacing:.2px;line-height:var(--lh-tight)}
+.header p{font-size:var(--fs-xs);opacity:.85;margin-top:3px}
+.header-badge{margin-left:auto;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);border-radius:20px;padding:4px 12px;font-size:var(--fs-2xs);font-weight:700}
+.header-user{margin-left:auto;display:flex;align-items:center;gap:12px}
+.header-user span{font-size:var(--fs-sm);font-weight:600}
+.header-user button{background:none;border:none;color:#fff;font-size:var(--fs-sm);cursor:pointer;padding:4px 8px;border-radius:6px}
+.header-user button:hover{background:rgba(255,255,255,.1)}
+
+/* ── 容器 ── */
+.container{max-width:1280px;margin:0 auto;padding:24px 16px}
+
+/* ── 步骤条 ── */
+.steps{display:flex;gap:0;margin-bottom:28px;background:#fff;border-radius:12px;padding:4px;box-shadow:0 2px 8px rgba(0,0,0,.08);overflow-x:auto}
+.step{flex:1;display:flex;align-items:center;justify-content:center;gap:8px;padding:12px 10px;border-radius:8px;cursor:pointer;transition:all .2s;white-space:nowrap;min-width:110px}
+.step.active{background:linear-gradient(135deg,#2563eb,#3b82f6);color:#fff;box-shadow:0 4px 12px rgba(37,99,235,.35)}
+.step.done{background:#f0fdf4;color:#166534}
+.step-num{width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,.1);display:flex;align-items:center;justify-content:center;font-size:var(--fs-2xs);font-weight:800;flex-shrink:0}
+.step.active .step-num{background:rgba(255,255,255,.3);color:#fff}
+.step.done .step-num{background:#22c55e;color:#fff}
+.step-label{font-size:var(--fs-xs);font-weight:700;color:#64748b}
+.step.active .step-label,.step.active .step-num{color:#fff}
+.step.done .step-label{color:#166534}
+.step-sep{align-self:center;color:#cbd5e1;font-size:var(--fs-lg);flex-shrink:0}
+
+/* ── 卡片 ── */
+.card{background:#fff;border-radius:14px;padding:24px;box-shadow:0 2px 8px rgba(0,0,0,.07);margin-bottom:20px}
+.card-title{font-size:var(--fs-md);font-weight:800;color:#0f172a;margin-bottom:18px;display:flex;align-items:center;gap:8px;padding-bottom:12px;border-bottom:2px solid #f1f5f9;line-height:var(--lh-tight)}
+.card-subtitle{font-size:var(--fs-sm);color:#64748b;font-weight:500;margin-left:auto}
+
+/* ── 表单 ── */
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px}
+@media(max-width:768px){.grid-2,.grid-3{grid-template-columns:1fr}}
+label{display:block;font-size:var(--fs-xs);font-weight:800;color:#334155;margin-bottom:6px;text-transform:uppercase;letter-spacing:.3px}
+input[type=text],input[type=password],input[type=number],textarea,select{width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:var(--fs-sm);font-family:inherit;transition:border-color .2s,box-shadow .2s,background-color .2s;outline:none;background:#fafbfc;line-height:var(--lh-base)}
+input:focus,textarea:focus,select:focus{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.1);background:#fff}
+textarea{resize:vertical;min-height:120px}
+input[type=number]{appearance:textfield;-moz-appearance:textfield}
+input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
+
+/* ── 上传区域 ── */
+.upload-area{border:2px dashed #cbd5e1;border-radius:12px;padding:36px;text-align:center;cursor:pointer;transition:all .2s;background:#fafbfc;position:relative}
+.upload-area:hover,.upload-area.dragover{border-color:#2563eb;background:#eff6ff}
+.upload-area.disabled{opacity:.65;cursor:not-allowed}
+.upload-area.disabled:hover,.upload-area.disabled.dragover{border-color:#cbd5e1;background:#fafbfc}
+.upload-area input{display:none}
+.upload-icon{font-size:40px;margin-bottom:10px}
+.upload-text{font-size:var(--fs-sm);font-weight:800;color:#334155}
+.upload-hint{font-size:var(--fs-xs);color:#94a3b8;margin-top:6px}
+.file-selected{font-size:var(--fs-xs);color:#2563eb;font-weight:700;margin-top:10px;padding:6px 32px 6px 12px;background:#eff6ff;border-radius:10px;display:inline-flex;align-items:center;gap:8px;position:relative;max-width:100%}
+.file-selected .file-name{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:520px}
+.file-selected .file-clear{position:absolute;top:6px;right:6px;width:18px;height:18px;border-radius:7px;border:1px solid rgba(37,99,235,.25);background:rgba(255,255,255,.65);color:#1d4ed8;display:grid;place-items:center;cursor:pointer;line-height:1;font-weight:900;font-size:var(--fs-md);padding:0}
+.file-selected .file-clear:hover{background:#fff;border-color:rgba(37,99,235,.35)}
+
+/* ── 文本框内嵌清空按钮 ── */
+.textarea-wrap{position:relative}
+.textarea-wrap textarea{padding-right:92px}
+.textarea-clear{position:absolute;right:10px;bottom:10px;padding:6px 10px;border-radius:10px;border:1px solid #e2e8f0;background:rgba(255,255,255,.92);color:#475569;font-size:var(--fs-xs);font-weight:800;cursor:pointer;transition:all .15s;display:none}
+.textarea-clear:hover{background:#fff;border-color:#cbd5e1;box-shadow:0 6px 18px rgba(2,6,23,.08)}
+.textarea-clear:active{transform:translateY(1px)}
+
+/* ── 按钮 ── */
+.btn{display:inline-flex;align-items:center;gap:8px;padding:10px 22px;border-radius:10px;border:none;font-size:var(--fs-sm);font-weight:800;cursor:pointer;transition:all .2s;font-family:inherit;line-height:var(--lh-tight)}
+.btn-primary{background:#2563eb;color:#fff}
+.btn-primary:hover:not(:disabled){background:#1d4ed8;box-shadow:0 4px 14px rgba(37,99,235,.4)}
+.btn-success{background:#16a34a;color:#fff}
+.btn-success:hover:not(:disabled){background:#15803d;box-shadow:0 4px 14px rgba(22,163,74,.35)}
+.btn-outline{background:#fff;color:#374151;border:1.5px solid #e2e8f0}
+.btn-outline:hover{background:#f8fafc;border-color:#cbd5e1}
+.btn-danger{background:#dc2626;color:#fff}
+.btn-warning{background:#f59e0b;color:#fff}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-full{width:100%;justify-content:center}
+.btn-lg{padding:12px 28px;font-size:var(--fs-base)}
+.btn-sm{padding:6px 14px;font-size:var(--fs-xs)}
+
+/* ── 提示框 ── */
+.alert{padding:11px 14px;border-radius:10px;font-size:var(--fs-sm);margin-bottom:14px;display:flex;gap:10px;align-items:flex-start}
+.alert-error{background:#fef2f2;border:1px solid #fecaca;color:#991b1b}
+.alert-success{background:#f0fdf4;border:1px solid #bbf7d0;color:#166534}
+.alert-info{background:#eff6ff;border:1px solid #bfdbfe;color:#1e40af}
+.alert-warning{background:#fffbeb;border:1px solid #fde68a;color:#92400e}
+
+/* ── 加载动画 ── */
+.spinner{width:16px;height:16px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite;flex-shrink:0}
+.spinner-dark{width:36px;height:36px;border:3px solid rgba(37,99,235,.15);border-top-color:#2563eb;border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── AI鲸鱼图标 ── */
+.ai-whale{width:30px;height:30px;display:inline-block;vertical-align:-7px;color:#2563eb;filter:drop-shadow(0 2px 8px rgba(37,99,235,.18))}
+.ai-whale svg{width:100%;height:100%;display:block}
+
+/* ── 功能模块卡片 ── */
+.module-card{border:1px solid #e2e8f0;border-radius:10px;margin-bottom:10px;overflow:hidden}
+.module-header{background:#f8fafc;padding:11px 16px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none}
+.module-header:hover{background:#f1f5f9}
+.module-title{font-size:var(--fs-sm);font-weight:800;color:#0f172a;display:flex;align-items:center;gap:8px}
+.module-badge{background:#dbeafe;color:#1d4ed8;font-size:var(--fs-2xs);padding:2px 8px;border-radius:20px;font-weight:800}
+.module-toggle{color:#94a3b8;transition:transform .2s;font-size:var(--fs-lg)}
+.module-toggle.open{transform:rotate(180deg)}
+.module-body{padding:12px 16px;border-top:1px solid #f1f5f9;display:none}
+.module-body.open{display:block}
+.func-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f8fafc}
+.func-row:last-child{border-bottom:none}
+.func-name{flex:1;font-size:var(--fs-xs);color:#334155}
+.func-cx{width:140px}
+.func-cx select{padding:4px 6px;font-size:var(--fs-2xs)}
+.func-assoc{width:170px}
+.func-assoc select{padding:4px 6px;font-size:var(--fs-2xs)}
+.func-del{width:30px;height:30px;border-radius:10px;border:1px solid #e2e8f0;background:#fff;color:#ef4444;display:grid;place-items:center;cursor:pointer;transition:all .15s;flex:0 0 auto}
+.func-del:hover{border-color:#fecaca;background:#fef2f2}
+.func-del:active{transform:translateY(1px)}
+
+/* ── 参数配置表格 ── */
+.param-table{width:100%;border-collapse:collapse;font-size:var(--fs-sm)}
+.param-table th{background:#f1f5f9;padding:9px 12px;text-align:left;font-weight:900;font-size:var(--fs-2xs);color:#334155;text-transform:uppercase;letter-spacing:.3px;border:1px solid #e2e8f0}
+.param-table td{padding:8px 12px;border:1px solid #e2e8f0;vertical-align:middle}
+.param-table tr:hover td{background:#fafbfc}
+.param-table input,.param-table select{padding:6px 8px;font-size:var(--fs-xs);border-radius:8px}
+.param-section{margin-bottom:24px}
+.param-section h4{font-size:var(--fs-sm);font-weight:900;color:#334155;margin-bottom:10px;padding:7px 10px;background:#f8fafc;border-left:3px solid #2563eb;border-radius:0 8px 8px 0}
+
+/* ── KPI 卡片 ── */
+.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
+@media(max-width:900px){.kpi-grid{grid-template-columns:repeat(2,1fr)}}
+.kpi-card{border-radius:12px;padding:18px;text-align:center;position:relative;overflow:hidden}
+.kpi-card::before{content:'';position:absolute;top:0;left:0;right:0;bottom:0;opacity:.08;border-radius:12px}
+.kpi-blue{background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1px solid #bfdbfe}
+.kpi-green{background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:1px solid #bbf7d0}
+.kpi-purple{background:linear-gradient(135deg,#faf5ff,#ede9fe);border:1px solid #ddd6fe}
+.kpi-orange{background:linear-gradient(135deg,#fff7ed,#fed7aa);border:1px solid #fdba74}
+.kpi-value{font-size:26px;font-weight:800;margin:4px 0}
+.kpi-blue .kpi-value{color:#1d4ed8}
+.kpi-green .kpi-value{color:#15803d}
+.kpi-purple .kpi-value{color:#7c3aed}
+.kpi-orange .kpi-value{color:#c2410c}
+.kpi-label{font-size:var(--fs-2xs);font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#64748b}
+.kpi-unit{font-size:var(--fs-2xs);color:#94a3b8;margin-top:2px}
+
+/* ── 图表区域 ── */
+.charts-grid{display:grid;grid-template-columns:1fr 1.6fr;gap:18px;margin-bottom:20px}
+@media(max-width:900px){.charts-grid{grid-template-columns:1fr}}
+.chart-box{background:#f8fafc;border-radius:12px;padding:18px;border:1px solid #e2e8f0}
+.chart-title{font-size:var(--fs-xs);font-weight:900;color:#334155;margin-bottom:14px;text-transform:uppercase;letter-spacing:.5px}
+.chart-wrap{position:relative;height:240px}
+
+/* ── 标签页 ── */
+.tabs{display:flex;gap:0;border-bottom:2px solid #e2e8f0;margin-bottom:20px}
+.tab-btn{padding:10px 18px;font-size:var(--fs-sm);font-weight:900;color:#64748b;background:none;border:none;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .2s;font-family:inherit}
+.tab-btn:hover{color:#2563eb}
+.tab-btn.active{color:#2563eb;border-bottom-color:#2563eb}
+.tab-content{display:none}
+.tab-content.active{display:block}
+
+/* ── 数据表格 ── */
+.data-table{width:100%;border-collapse:collapse;font-size:var(--fs-xs)}
+.data-table th{background:#f1f5f9;padding:9px 12px;text-align:left;font-weight:900;border:1px solid #e2e8f0;font-size:var(--fs-2xs);text-transform:uppercase;letter-spacing:.3px}
+.data-table td{padding:8px 12px;border:1px solid #e2e8f0;vertical-align:middle}
+.data-table tr:nth-child(even) td{background:#fafbfc}
+.data-table tr:hover td{background:#eff6ff}
+.data-table .num{text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
+.data-table .num.center{text-align:center}
+.data-table .pct{text-align:center}
+
+/* ── 成本团队卡片 ── */
+.cost-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:16px}
+@media(max-width:1000px){.cost-grid{grid-template-columns:repeat(2,1fr)}}
+.cost-card{border-radius:10px;padding:14px;background:#f8fafc;border:1px solid #e2e8f0;text-align:center}
+.cost-card-label{font-size:var(--fs-2xs);font-weight:900;text-transform:uppercase;letter-spacing:.5px;color:#64748b;margin-bottom:6px}
+.cost-card-days{font-size:var(--fs-sm);font-weight:900;color:#0f172a}
+.cost-card-cost{font-size:var(--fs-xs);color:#2563eb;margin-top:3px;font-weight:800}
+.cost-total-row{background:linear-gradient(135deg,#1e3a5f,#2563eb);border-radius:10px;padding:16px 24px;display:flex;justify-content:space-between;align-items:center;color:#fff}
+.cost-total-label{font-size:var(--fs-sm);font-weight:800;opacity:.88}
+.cost-total-value{font-size:22px;font-weight:800}
+
+/* ── 合规徽章 ── */
+.badge-pass{background:#dcfce7;color:#166534;padding:3px 10px;border-radius:20px;font-size:var(--fs-2xs);font-weight:900}
+.badge-fail{background:#fee2e2;color:#991b1b;padding:3px 10px;border-radius:20px;font-size:var(--fs-2xs);font-weight:900}
+.badge-warn{background:#fef3c7;color:#92400e;padding:3px 10px;border-radius:20px;font-size:var(--fs-2xs);font-weight:900}
+
+/* ── 进度条 ── */
+.progress-bar{background:#e2e8f0;border-radius:20px;height:8px;overflow:hidden;margin-top:6px}
+.progress-fill{height:100%;border-radius:20px;background:linear-gradient(90deg,#2563eb,#3b82f6);transition:width .6s}
+.progress-fill.danger{background:linear-gradient(90deg,#dc2626,#ef4444)}
+.progress-fill.success{background:linear-gradient(90deg,#16a34a,#22c55e)}
+
+/* ── 计算轨迹 ── */
+.trace-card{border:1px solid #e2e8f0;border-radius:8px;margin-bottom:10px;overflow:hidden}
+.trace-header{background:#f8fafc;padding:10px 14px;font-size:var(--fs-xs);font-weight:900;color:#334155;cursor:pointer;display:flex;justify-content:space-between;align-items:center}
+.trace-body{padding:12px 14px;display:none;background:#fdfdfd;font-size:var(--fs-2xs);color:#475569;border-top:1px solid #f1f5f9}
+.trace-body.open{display:block}
+.trace-row{display:flex;gap:8px;margin-bottom:4px;align-items:baseline}
+.trace-key{color:#94a3b8;min-width:110px;font-size:var(--fs-2xs);text-transform:uppercase}
+.trace-val{font-weight:600;color:#1e293b}
+.trace-formula{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;background:#f1f5f9;padding:4px 8px;border-radius:6px;margin-top:6px;font-size:var(--fs-2xs);color:#475569;word-break:break-all}
+
+/* ── 成功框 ── */
+.success-box{background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:1px solid #86efac;border-radius:14px;padding:24px;text-align:center}
+.success-box .icon{font-size:52px;margin-bottom:12px}
+.success-box h3{font-size:var(--fs-lg);font-weight:900;color:#166534;margin-bottom:8px}
+
+/* ── 步骤内容 ── */
+#step-content > div{display:none}
+#step-content > div.active{display:block}
+.divider{border:none;border-top:1px solid #e2e8f0;margin:18px 0}
+.actions-row{display:flex;justify-content:space-between;align-items:center;margin-top:20px;gap:12px}
+
+/* ── 复杂度标签 ── */
+.cx-basic{color:#15803d;font-weight:600}
+.cx-very-basic{color:#16a34a;font-weight:600}
+.cx-medium{color:#d97706;font-weight:600}
+.cx-complex{color:#b91c1c;font-weight:600}
+.cx-very-complex{color:#7f1d1d;font-weight:600}
+
+/* ── 导航菜单 ── */
+.nav-menu{display:flex;gap:12px;margin-bottom:20px;background:#fff;border-radius:12px;padding:8px;box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.nav-item{padding:10px 20px;border-radius:8px;cursor:pointer;transition:all .2s;font-size:var(--fs-sm);font-weight:700;color:#64748b}
+.nav-item:hover{background:#f8fafc}
+.nav-item.active{background:linear-gradient(135deg,#2563eb,#3b82f6);color:#fff}
+
+/* ── 项目列表 ── */
+.project-list{margin-top:20px}
+.project-card{border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin-bottom:12px;transition:all .2s}
+.project-card:hover{box-shadow:0 4px 12px rgba(0,0,0,.1)}
+.project-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.project-title{font-size:var(--fs-md);font-weight:800;color:#0f172a}
+.project-status{padding:4px 12px;border-radius:20px;font-size:var(--fs-2xs);font-weight:800}
+.status-active{background:#dbeafe;color:#1d4ed8}
+.status-completed{background:#dcfce7;color:#166534}
+.status-planning{background:#fef3c7;color:#92400e}
+.project-info{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px}
+.project-info-item{font-size:var(--fs-xs);color:#64748b}
+.project-info-item .label{font-weight:800;text-transform:uppercase;letter-spacing:.3px}
+.project-info-item .value{font-weight:600;color:#0f172a}
+.project-actions{display:flex;gap:8px}
+
+/* ── 登录页面 ── */
+.login-container{max-width:480px;margin:60px auto;padding:32px;background:#fff;border-radius:16px;box-shadow:0 10px 26px rgba(0,0,0,.12)}
+.login-header{text-align:center;margin-bottom:32px}
+.login-header h1{font-size:var(--fs-xl);font-weight:800;color:#0f172a;margin-bottom:8px}
+.login-header p{font-size:var(--fs-sm);color:#64748b}
+.login-form{margin-bottom:24px}
+.login-form .form-group{margin-bottom:16px}
+.login-form label{display:block;font-size:var(--fs-sm);font-weight:800;color:#334155;margin-bottom:6px}
+.login-form input{width:100%;padding:12px 16px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:var(--fs-base)}
+.login-form input:focus{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.1)}
+.login-btn{width:100%;padding:12px 0;font-size:var(--fs-md);font-weight:800;background:linear-gradient(135deg,#2563eb,#3b82f6);color:#fff;border:none;border-radius:10px;cursor:pointer;transition:all .2s}
+.login-btn:hover{box-shadow:0 4px 14px rgba(37,99,235,.4)}
+.login-error{background:#fef2f2;border:1px solid #fecaca;color:#991b1b;padding:12px;border-radius:10px;margin-bottom:16px;font-size:var(--fs-sm)}
+
+.section-hint{font-size:var(--fs-xs);color:#64748b;margin-bottom:14px;line-height:var(--lh-base)}
+</style>
+</head>
+<body>
+
+<!-- 登录页面 -->
+<div id="login-page" style="display:block">
+  <div class="login-container">
+    <div class="login-header">
+      <h1>项目成本估算监控系统</h1>
+      <p>请登录以访问系统</p>
+    </div>
+    <div id="login-error" class="login-error" style="display:none"></div>
+    <form class="login-form" onsubmit="handleLogin(event)">
+      <div class="form-group">
+        <label>用户名</label>
+        <input type="text" id="username" placeholder="请输入用户名" required>
+      </div>
+      <div class="form-group">
+        <label>密码</label>
+        <input type="password" id="password" placeholder="请输入密码" required>
+      </div>
+      <button type="submit" class="login-btn">登录</button>
+    </form>
+    <div style="text-align:center;margin-top:16px;font-size:var(--fs-xs);color:#94a3b8">
+      <p>默认用户名: admin / user</p>
+      <p>默认密码: admin123 / user123</p>
+    </div>
+  </div>
+</div>
+
+<!-- 主系统页面 -->
+<div id="main-app" style="display:none">
+  <div class="header">
+    <div class="header-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" role="img" focusable="false">
+        <path d="M4 21h16v-2H4v2Zm2-4h12V3H6v14Zm2-2V5h8v10H8Zm1-7h2V6H9v2Zm0 3h2V9H9v2Zm4-3h2V6h-2v2Zm0 3h2V9h-2v2Z"/>
+      </svg>
+    </div>
+    <div>
+      <h1>项目成本估算监控系统</h1>
+      <p>智能成本管理 · 实时监控 · 数据驱动决策</p>
+    </div>
+    <div class="header-user">
+      <span id="user-info">管理员</span>
+      <button onclick="logout()">退出登录</button>
+    </div>
+  </div>
+
+  <div class="container">
+    <!-- 导航菜单 -->
+    <div class="nav-menu">
+      <div class="nav-item active" data-page="dashboard">首页仪表盘</div>
+      <div class="nav-item" data-page="workload">工作量评估</div>
+      <div class="nav-item" data-page="cost-estimation">成本消耗预估</div>
+      <div class="nav-item" data-page="cost-deviation">成本偏差分析</div>
+    </div>
+
+    <!-- 页面内容 -->
+    <div id="page-content">
+      <!-- 首页仪表盘 -->
+      <div id="dashboard" class="page-content active">
+        <div class="card">
+          <div class="card-title">📊 项目概览</div>
+          <div class="kpi-grid">
+            <div class="kpi-card kpi-blue">
+              <div class="kpi-label">总项目数</div>
+              <div class="kpi-value" id="total-projects">3</div>
+              <div class="kpi-unit">个项目</div>
+            </div>
+            <div class="kpi-card kpi-green">
+              <div class="kpi-label">进行中项目</div>
+              <div class="kpi-value" id="active-projects">1</div>
+              <div class="kpi-unit">个项目</div>
+            </div>
+            <div class="kpi-card kpi-orange">
+              <div class="kpi-label">总预估成本</div>
+              <div class="kpi-value" id="total-estimated-cost">350</div>
+              <div class="kpi-unit">万元</div>
+            </div>
+            <div class="kpi-card kpi-purple">
+              <div class="kpi-label">总实际成本</div>
+              <div class="kpi-value" id="total-actual-cost">173</div>
+              <div class="kpi-unit">万元</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">📋 项目列表</div>
+          <div class="project-list" id="project-list">
+            <!-- 项目卡片将通过JS动态生成 -->
+          </div>
+        </div>
+      </div>
+
+      <!-- 工作量评估 -->
+      <div id="workload" class="page-content" style="display:none">
+        <!-- 步骤条 -->
+        <div class="steps" id="steps-nav">
+          <div class="step active" id="sn-1" onclick="tryGoStep(1)">
+            <div class="step-num">1</div><div class="step-label">上传文档</div>
+          </div>
+          <span class="step-sep">›</span>
+          <div class="step" id="sn-2" onclick="tryGoStep(2)">
+            <div class="step-num">2</div><div class="step-label">项目信息</div>
+          </div>
+          <span class="step-sep">›</span>
+          <div class="step" id="sn-3" onclick="tryGoStep(3)">
+            <div class="step-num">3</div><div class="step-label">AI分析</div>
+          </div>
+          <span class="step-sep">›</span>
+          <div class="step" id="sn-4" onclick="tryGoStep(4)">
+            <div class="step-num">4</div><div class="step-label">参数配置</div>
+          </div>
+          <span class="step-sep">›</span>
+          <div class="step" id="sn-5" onclick="tryGoStep(5)">
+            <div class="step-num">5</div><div class="step-label">结果报告</div>
+          </div>
+        </div>
+
+        <div id="step-content">
+          <!-- ══ STEP 1: 上传文档 ══ -->
+          <div class="active" id="step-1">
+            <div class="card">
+              <div class="card-title">📄 上传需求规格说明书</div>
+              <p class="section-hint">支持 DOC/DOCX 格式的需求规格说明书。文档需包含功能描述、技术栈信息及业务流程说明，以确保AI识别准确。</p>
+              <div style="background:#FFF3E0;border-left:4px solid #FF9800;padding:10px 14px;margin-bottom:14px;border-radius:6px;color:#E65100;font-size:13px;line-height:1.6">
+                ⚠️ <b>提示：</b>业务需求功能点建议不超过 <b>30个</b>。当前模型能力有限，功能点过多可能导致AI分析精度下降，建议将大型需求拆分后分批评估。
+              </div>
+              <div class="upload-area" id="upload-area" onclick="onUploadAreaClick()">
+                <input type="file" id="file-input" accept=".doc,.docx,.txt" onchange="handleFileSelect(this)">
+                <div class="upload-icon">📁</div>
+                <div class="upload-text">点击选择文件，或拖拽文件到此处</div>
+                <div class="upload-hint">支持：Word文档 (.doc / .docx) · 文本文件 (.txt)</div>
+                <div class="file-selected" id="file-name-display" style="display:none">
+                  <span class="file-name" id="file-name-text"></span>
+                  <button class="file-clear" type="button" aria-label="删除已选文件" onclick="clearSelectedFile(event)">×</button>
+                </div>
+              </div>
+              <hr class="divider">
+              <label>或直接粘贴需求文本</label>
+              <div class="textarea-wrap">
+                <textarea id="doc-text" placeholder="将需求说明书中的功能描述部分粘贴在此处...&#10;系统会自动识别功能模块、功能点和复杂度"></textarea>
+                <button class="textarea-clear" id="doc-text-clear-btn" type="button" onclick="clearDocText(event)">一键清空</button>
+              </div>
+              <div class="actions-row" style="justify-content:flex-end">
+                <button class="btn btn-primary" id="step1-next-btn" onclick="goStep(2)" disabled>下一步：填写项目信息 →</button>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-title">📐 计算公式说明</div>
+              <table class="param-table">
+                <thead><tr><th>阶段</th><th>计算公式</th><th>说明（技术栈默认“微服务架构”）</th></tr></thead>
+                <tbody>
+                  <tr><td><strong>需求</strong></td><td>Σ(基准 × 关联度 × 流程系数) × (1+管理系数)</td><td>流程系数默认1.0</td></tr>
+                  <tr><td><strong>UI设计</strong></td><td>Σ(基准 × 关联度 × 流程系数) × (1+管理系数)</td><td>流程系数默认0.3</td></tr>
+                  <tr><td><strong>技术设计</strong></td><td>Σ(基准 × 关联度 × 流程系数 × <em>技术栈</em>) × (1+管理系数)</td><td>流程系数默认0.5</td></tr>
+                  <tr><td><strong>开发</strong></td><td>Σ(基准 × 关联度 × 流程系数 × <em>技术栈</em>) × (1+管理系数)</td><td>流程系数默认1.2</td></tr>
+                  <tr><td><strong>技术测试</strong></td><td>Σ(基准 × 关联度 × 流程系数 × <em>技术栈</em>) × (1+管理系数)</td><td>流程系数默认0.7</td></tr>
+                  <tr><td><strong>性能测试</strong></td><td>Σ(基准 × 关联度 × 流程系数) × (1+管理系数)</td><td>流程系数默认0.3</td></tr>
+                  <tr><td><strong>投产上线</strong></td><td>(需求+设计+研发+技测+性测) × 2%</td><td>固定比例，最后计算</td></tr>
+                </tbody>
+              </table>
+              <p style="font-size:11px;color:#64748b;margin-top:10px">* 复杂度基准：较为基础=0.5天，基础=1天，中等=1.5天，复杂=2天，极复杂=2.5天 ｜ 1人月 = 21.75人天 ｜ 阶段合计先求和再取整到0.5</p>
+            </div>
+          </div>
+
+          <!-- ══ STEP 2: 项目信息 ══ -->
+          <div id="step-2">
+            <div class="card">
+              <div class="card-title">⚙️ 项目基本信息</div>
+              <div class="grid-2">
+                <div>
+                  <label>项目名称</label>
+                  <input type="text" id="project-name" placeholder="例：人工智能Agent能力价值释放项目">
+                </div>
+                <div>
+                  <label>项目编号</label>
+                  <input type="text" id="project-id" placeholder="例：PRJ-2026-001">
+                </div>
+                <div>
+                  <label>系统名称</label>
+                  <input type="text" id="system-name" placeholder="例：成本预估智能平台">
+                </div>
+                <div>
+                  <label>团队规模（影响管理系数）</label>
+                  <select id="team-size-hint">
+                    <option value="small">≤10人（管理系数 0.15）</option>
+                    <option value="medium" selected>11-20人（管理系数 0.20）</option>
+                    <option value="large">＞20人（管理系数 0.25）</option>
+                  </select>
+                </div>
+              </div>
+              <div id="analyze-error" class="alert alert-error" style="display:none;margin-top:12px"></div>
+              <div class="actions-row">
+                <button class="btn btn-outline" onclick="goStep(1)">← 上一步</button>
+                <button class="btn btn-primary btn-lg" id="analyze-btn" onclick="startAnalysis()">
+                  <span id="analyze-icon">🔍</span>
+                  <span id="analyze-text">开始AI分析需求</span>
+                  <div class="spinner" id="analyze-spinner" style="display:none"></div>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- ══ STEP 3: AI分析 & 功能审核 ══ -->
+          <div id="step-3">
+            <!-- 加载中 -->
+            <div class="card" id="analysis-loading" style="display:none">
+              <div class="card-title">
+                <span class="ai-whale" aria-hidden="true">
+                  <svg viewBox="0 0 64 64" role="img" focusable="false" preserveAspectRatio="xMidYMid meet">
+                    <defs>
+                      <linearGradient id="whaleBody" x1="12" y1="18" x2="52" y2="54" gradientUnits="userSpaceOnUse">
+                        <stop offset="0" stop-color="#5ee7ff"/>
+                        <stop offset="0.55" stop-color="#3b82f6"/>
+                        <stop offset="1" stop-color="#2563eb"/>
+                      </linearGradient>
+                      <linearGradient id="whaleBelly" x1="18" y1="34" x2="50" y2="60" gradientUnits="userSpaceOnUse">
+                        <stop offset="0" stop-color="#ffffff" stop-opacity="0.95"/>
+                        <stop offset="1" stop-color="#e0f2fe" stop-opacity="0.95"/>
+                      </linearGradient>
+                      <linearGradient id="tailGlow" x1="6" y1="28" x2="22" y2="46" gradientUnits="userSpaceOnUse">
+                        <stop offset="0" stop-color="#93c5fd" stop-opacity="0.95"/>
+                        <stop offset="1" stop-color="#60a5fa" stop-opacity="0.6"/>
+                      </linearGradient>
+                    </defs>
+
+                    <!-- tail -->
+                    <path d="M14 30c-4 0-7 3-7 6 0 3 3 6 7 6 2.6 0 5-1.2 6.4-3.1 1.1 2 2.9 3.4 5 3.9 1.1.3 2.1-.7 1.9-1.8-.8-4.7-.8-9.1 0-13.7.2-1.1-.8-2.1-1.9-1.8-2.1.5-3.9 1.9-5 3.9C19 31.2 16.6 30 14 30Z" fill="url(#tailGlow)"/>
+                    <path d="M12 36c2.7-1.5 5.5-1.6 8.4-.2" fill="none" stroke="#dbeafe" stroke-width="2.2" stroke-linecap="round" opacity="0.85"/>
+
+                    <!-- body -->
+                    <path d="M22 18c-9.4 0-17 7.6-17 17s7.6 17 17 17h14c13.8 0 25-8.2 25-18S49.8 18 36 18H22Z" fill="url(#whaleBody)"/>
+                    <!-- belly -->
+                    <path d="M24 34c0 10 7.5 18 18.5 18 6.8 0 13-2.3 17.4-6.2-3.9 1.5-8.7 2.4-13.9 2.4C34.2 48.2 26.2 42.5 24 34Z" fill="url(#whaleBelly)"/>
+
+                    <!-- soft highlight -->
+                    <path d="M20 22c-6.5 1.3-11.4 6.7-11.4 13.2" fill="none" stroke="#e0f2fe" stroke-width="4" stroke-linecap="round" opacity="0.35"/>
+
+                    <!-- eyes -->
+                    <circle cx="44.5" cy="34" r="6.2" fill="#0b2f8a" opacity="0.9"/>
+                    <circle cx="45.6" cy="33" r="5.2" fill="#1d4ed8" opacity="0.9"/>
+                    <circle cx="46.8" cy="31.8" r="2.1" fill="#ffffff" opacity="0.95"/>
+                    <circle cx="44.2" cy="35.3" r="1.1" fill="#ffffff" opacity="0.75"/>
+
+                    <!-- smile -->
+                    <path d="M40 41.2c2.3 1.6 5 1.7 7.8.2" fill="none" stroke="#0b2f8a" stroke-width="2.2" stroke-linecap="round" opacity="0.35"/>
+
+                    <!-- AI mark on head -->
+                    <path d="M29 26.5c3.4-2.4 7.6-3.2 12.1-2.3" fill="none" stroke="#dbeafe" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
+                    <path d="M33.3 24.8h6.6a2 2 0 0 1 2 2v4.3a2 2 0 0 1-2 2h-6.6a2 2 0 0 1-2-2v-4.3a2 2 0 0 1 2-2Z" fill="rgba(255,255,255,.18)" stroke="#bfdbfe" stroke-width="1.2" opacity="0.95"/>
+                    <text x="36.6" y="31" text-anchor="middle" font-size="6.6" font-weight="800" fill="#e0f2fe" style="font-family:system-ui,-apple-system,'Segoe UI','Microsoft YaHei',sans-serif">AI</text>
+
+                    <!-- soundwave / dots -->
+                    <path d="M28 14.5h3m3 0h3m3 0h3" stroke="#93c5fd" stroke-width="2" stroke-linecap="round" opacity="0.85"/>
+                    <path d="M30 10c0 4 0 8 0 12M34 8c0 6 0 12 0 18M38 10c0 4 0 8 0 12" stroke="#60a5fa" stroke-width="2.2" stroke-linecap="round" opacity="0.55"/>
+                    <circle cx="26" cy="13.2" r="1" fill="#bfdbfe" opacity="0.9"/>
+                    <circle cx="46" cy="13.2" r="1" fill="#bfdbfe" opacity="0.9"/>
+                  </svg>
+                </span>
+                AI 正在分析需求文档...
+              </div>
+              <div style="text-align:center;padding:30px 0">
+                <div class="spinner-dark" style="margin:0 auto 18px"></div>
+                <p style="font-size:15px;color:#2563eb;font-weight:600" id="analysis-status-text">正在上传文档并调用AI模型...</p>
+                <div style="margin-top:14px;background:#e2e8f0;border-radius:8px;height:8px;overflow:hidden;max-width:420px;margin-left:auto;margin-right:auto">
+                  <div id="analysis-progress-bar" style="width:0%;height:100%;background:linear-gradient(90deg,#2563eb,#3b82f6);border-radius:8px;transition:width .5s ease"></div>
+                </div>
+                <p style="font-size:12px;color:#94a3b8;margin-top:10px" id="analysis-time-text">预计需要 10~30 秒，请稍候...</p>
+              </div>
+            </div>
+
+            <!-- 分析结果 -->
+            <div id="analysis-results" style="display:none">
+              <div class="card">
+                <div class="card-title">✏️ 审核功能列表
+                  <span class="card-subtitle" id="analysis-summary-badge"></span>
+                </div>
+                <div class="alert alert-info">💡 请检查AI识别的功能点是否准确，并调整每个功能点的复杂度（影响基准人天：较为基础=0.5天，基础=1天，中等=1.5天，复杂=2天，极复杂=2.5天）。</div>
+                <div id="modules-container"></div>
+                <div class="actions-row">
+                  <button class="btn btn-outline" onclick="goStep(2)">← 重新分析</button>
+                  <button class="btn btn-primary" onclick="goStep(4)">下一步：参数配置 →</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 分析失败 -->
+            <div class="card" id="analysis-error-card" style="display:none">
+              <div class="card-title">❌ 分析失败</div>
+              <div id="analysis-error-msg" class="alert alert-error"></div>
+              <button class="btn btn-primary" onclick="goStep(2)">← 返回重试</button>
+            </div>
+          </div>
+
+          <!-- ══ STEP 4: 参数配置 ══ -->
+          <div id="step-4">
+            <div class="card">
+              <div class="card-title">🎛️ 参数配置 <span class="card-subtitle">所有参数均可自定义，不确定时使用默认值</span></div>
+
+              <div class="param-section">
+                <h4>① 复杂度基准值（人天）</h4>
+                <p class="section-hint">复杂度由模型综合判断并支持人工调整：较为基础0.5人天，基础1人天，中等1.5人天，复杂2人天，极复杂2.5人天。</p>
+                <table class="param-table">
+                  <thead><tr><th>复杂度</th><th>基准人天</th></tr></thead>
+                  <tbody>
+                    <tr><td><span class="cx-very-basic">较为基础 Very Basic</span></td><td><input type="number" id="cb-very-basic" value="0.5" min="0.5" max="5" step="0.5" style="width:80px"></td></tr>
+                    <tr><td><span class="cx-basic">基础 Basic</span></td><td><input type="number" id="cb-basic" value="1" min="0.5" max="8" step="0.5" style="width:80px"></td></tr>
+                    <tr><td><span class="cx-medium">中等 Medium</span></td><td><input type="number" id="cb-medium" value="1.5" min="0.5" max="10" step="0.5" style="width:80px"></td></tr>
+                    <tr><td><span class="cx-complex">复杂 Complex</span></td><td><input type="number" id="cb-complex" value="2" min="0.5" max="12" step="0.5" style="width:80px"></td></tr>
+                    <tr><td><span class="cx-very-complex">极复杂 Very Complex</span></td><td><input type="number" id="cb-very-complex" value="2.5" min="0.5" max="15" step="0.5" style="width:80px"></td></tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div class="param-section">
+                <h4>② 各阶段流程系数</h4>
+                <p class="section-hint">对应不同阶段的工作量权重，可根据实际项目情况调整。</p>
+                <table class="param-table">
+                  <thead><tr><th>阶段</th><th>流程系数</th><th>说明</th><th>是否乘技术栈</th></tr></thead>
+                  <tbody>
+                    <tr><td>需求</td><td><input type="number" id="fc-requirements" value="0.7" step="0.05" min="0" style="width:80px"></td><td>需求分析阶段</td><td>否</td></tr>
+                    <tr><td>UI设计</td><td><input type="number" id="fc-ui_design" value="0.3" step="0.05" min="0" style="width:80px"></td><td>界面交互设计阶段</td><td>否</td></tr>
+                    <tr><td>技术设计</td><td><input type="number" id="fc-tech_design" value="0.5" step="0.05" min="0" style="width:80px"></td><td>详细技术设计</td><td>✓ 是</td></tr>
+                    <tr><td>开发</td><td><input type="number" id="fc-development" value="1.2" step="0.05" min="0" style="width:80px"></td><td>编码开发阶段</td><td>✓ 是</td></tr>
+                    <tr><td>技术测试</td><td><input type="number" id="fc-tech_testing" value="0.7" step="0.05" min="0" style="width:80px"></td><td>技术测试执行</td><td>✓ 是</td></tr>
+                    <tr><td>性能测试</td><td><input type="number" id="fc-perf_testing" value="0.3" step="0.05" min="0" style="width:80px"></td><td>压力与性能测试</td><td>否</td></tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div class="param-section">
+                <h4>③ 技术栈难度系数</h4>
+                <p class="section-hint">技术越复杂，同等功能所需工时越长（仅影响技术设计、开发、技术测试阶段）。</p>
+                <select id="tech-stack-coeff" style="width:300px">
+                  <option value="1.0">常规技术栈 → 系数 1.0（标准MVC/单体架构）</option>
+                  <option value="1.3" selected>微服务架构 → 系数 1.3（默认）</option>
+                  <option value="1.4">AI中台 → 系数 1.4（机器学习/大模型集成）</option>
+                  <option value="1.6">分布式事务 → 系数 1.6（分布式/高并发场景）</option>
+                </select>
+              </div>
+
+              <div class="param-section">
+                <h4>④ 人天单价配置（元/天）</h4>
+                <p class="section-hint">设置各角色的人天单价，用于计算各团队成本。</p>
+                <table class="param-table">
+                  <thead><tr><th>角色</th><th>单价（元/天）</th><th>适用场景</th></tr></thead>
+                  <tbody>
+                    <tr><td>产品经理</td><td><input type="number" id="rate-product_manager" value="2000" min="100" step="100" style="width:100px"></td><td>需求分析、产品设计阶段</td></tr>
+                    <tr><td>UI设计师</td><td><input type="number" id="rate-ui_designer" value="1800" min="100" step="100" style="width:100px"></td><td>UI/UX 设计阶段</td></tr>
+                    <tr><td>前端开发</td><td><input type="number" id="rate-frontend_dev" value="1800" min="100" step="100" style="width:100px"></td><td>技术设计+开发 × 40%</td></tr>
+                    <tr><td>后端开发</td><td><input type="number" id="rate-backend_dev" value="2000" min="100" step="100" style="width:100px"></td><td>技术设计+开发 × 60%</td></tr>
+                    <tr><td>功能测试</td><td><input type="number" id="rate-func_tester" value="1500" min="100" step="100" style="width:100px"></td><td>技术测试阶段</td></tr>
+                    <tr><td>性能测试</td><td><input type="number" id="rate-perf_tester" value="2000" min="100" step="100" style="width:100px"></td><td>性能测试阶段</td></tr>
+                    <tr><td>项目经理</td><td><input type="number" id="rate-project_manager" value="2000" min="100" step="100" style="width:100px"></td><td>全流程项目管理</td></tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div class="param-section">
+                <h4>⑤ 管理系数</h4>
+                <p class="section-hint">反映项目管理开销占纯技术工作量的比例。</p>
+                <select id="mgmt-coeff" style="width:320px">
+                  <option value="0.15" selected>0.15 — 小型团队 ≤10人（管理成本较低）</option>
+                  <option value="0.20">0.20 — 中型团队 11-20人（标准管理成本）</option>
+                  <option value="0.25">0.25 — 大型团队 ＞20人（管理成本较高）</option>
+                </select>
+              </div>
+
+              <div class="actions-row">
+                <button class="btn btn-outline" onclick="goStep(3)">← 返回功能列表</button>
+                <div style="display:flex;gap:10px">
+                  <button class="btn btn-outline btn-sm" onclick="resetParams()">↺ 重置默认值</button>
+                  <button class="btn btn-primary btn-lg" id="calc-btn" onclick="calculateAndPreview()">
+                    <span>📊</span>
+                    <span id="calc-text">计算工作量</span>
+                    <div class="spinner" id="calc-spinner" style="display:none"></div>
+                  </button>
+                </div>
+              </div>
+              <div id="calc-error" class="alert alert-error" style="display:none;margin-top:12px"></div>
+            </div>
+          </div>
+
+          <!-- ══ STEP 5: 结果报告 ══ -->
+          <div id="step-5">
+            <div class="card">
+              <div class="card-title">📊 工作量评估报告
+                <span class="card-subtitle" id="result-project-badge"></span>
+              </div>
+
+              <!-- KPI 卡片 -->
+              <div class="kpi-grid" id="kpi-cards">
+                <div class="kpi-card kpi-blue"><div class="kpi-label">总工作量</div><div class="kpi-value" id="kpi-days">—</div><div class="kpi-unit">人天</div></div>
+                <div class="kpi-card kpi-green"><div class="kpi-label">人月折算</div><div class="kpi-value" id="kpi-months">—</div><div class="kpi-unit">人月</div></div>
+                <div class="kpi-card kpi-orange"><div class="kpi-label">预估总成本</div><div class="kpi-value" id="kpi-cost">—</div><div class="kpi-unit">万元</div></div>
+                <div class="kpi-card kpi-purple"><div class="kpi-label">功能模块数</div><div class="kpi-value" id="kpi-modules">—</div><div class="kpi-unit">个模块</div></div>
+              </div>
+
+              <!-- 图表 -->
+              <div class="charts-grid">
+                <div class="chart-box">
+                  <div class="chart-title">🍕 团队工作量分布</div>
+                  <div class="chart-wrap"><canvas id="pie-chart"></canvas></div>
+                </div>
+                <div class="chart-box">
+                  <div class="chart-title">📊 各阶段工作量（人天）</div>
+                  <div class="chart-wrap"><canvas id="bar-chart"></canvas></div>
+                </div>
+              </div>
+
+              <!-- 标签页 -->
+              <div class="tabs">
+                <button class="tab-btn active" onclick="switchTab('overview')">总览</button>
+                <button class="tab-btn" onclick="switchTab('detail')">详细分析</button>
+                <button class="tab-btn" onclick="switchTab('cost')">团队成本</button>
+                <button class="tab-btn" onclick="switchTab('compliance')">合规校验</button>
+                <button class="tab-btn" onclick="switchTab('trace')">计算轨迹</button>
+              </div>
+
+              <!-- 总览 -->
+              <div class="tab-content active" id="tab-overview">
+                <div id="overview-table-wrap"></div>
+              </div>
+
+              <!-- 详细分析 -->
+              <div class="tab-content" id="tab-detail">
+                <table class="data-table">
+                  <thead><tr><th>阶段</th><th>模块</th><th>功能点</th><th>工作量（人天）</th><th>复杂度</th></tr></thead>
+                  <tbody id="detail-table-body"></tbody>
+                </table>
+              </div>
+
+              <!-- 团队成本 -->
+              <div class="tab-content" id="tab-cost">
+                <div class="cost-grid" id="team-costs-grid"></div>
+                <div class="cost-total-row">
+                  <div class="cost-total-label">项目总成本</div>
+                  <div class="cost-total-value" id="total-cost-value">—</div>
+                </div>
+              </div>
+
+              <!-- 合规校验 -->
+              <div class="tab-content" id="tab-compliance">
+                <table class="data-table">
+                  <thead><tr><th>阶段</th><th>人天</th><th>占比</th><th>合规区间</th><th>结果</th></tr></thead>
+                  <tbody id="compliance-table-body"></tbody>
+                </table>
+              </div>
+
+              <!-- 计算轨迹 -->
+              <div class="tab-content" id="tab-trace">
+                <div id="traces-container"></div>
+              </div>
+
+              <div class="actions-row" style="margin-top:20px">
+                <button class="btn btn-outline" onclick="goStep(4)">← 返回参数配置</button>
+                <div style="display:flex;gap:10px">
+                  <button class="btn btn-primary" id="download-btn" onclick="downloadExcel()">
+                    <span>📥</span>
+                    <span>下载Excel报告</span>
+                  </button>
+                  <button class="btn btn-success" onclick="goStep(1)">
+                    <span>🔄</span>
+                    <span>重新评估</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 成本消耗预估 -->
+      <div id="cost-estimation" class="page-content" style="display:none">
+        <div class="card">
+          <div class="card-title">📈 成本消耗预估</div>
+          <div class="grid-2">
+            <div>
+              <label>选择项目</label>
+              <select id="cost-estimation-project" onchange="loadProjectCostEstimation()">
+                <option value="">请选择项目</option>
+              </select>
+            </div>
+          </div>
+          <div id="cost-estimation-result" style="display:none">
+            <div class="kpi-grid">
+              <div class="kpi-card kpi-blue">
+                <div class="kpi-label">总预算成本</div>
+                <div class="kpi-value" id="est-total-cost">—</div>
+                <div class="kpi-unit">元</div>
+              </div>
+              <div class="kpi-card kpi-green">
+                <div class="kpi-label">已消耗成本</div>
+                <div class="kpi-value" id="est-consumed-cost">—</div>
+                <div class="kpi-unit">元</div>
+              </div>
+              <div class="kpi-card kpi-orange">
+                <div class="kpi-label">项目进度</div>
+                <div class="kpi-value" id="est-progress">—</div>
+                <div class="kpi-unit">%</div>
+              </div>
+              <div class="kpi-card kpi-purple">
+                <div class="kpi-label">剩余天数</div>
+                <div class="kpi-value" id="est-remaining-days">—</div>
+                <div class="kpi-unit">天</div>
+              </div>
+            </div>
+            <div class="chart-box">
+              <div class="chart-title">成本消耗趋势</div>
+              <div class="chart-wrap"><canvas id="cost-trend-chart"></canvas></div>
+            </div>
+          </div>
+          <div id="cost-estimation-loading" style="display:none;text-align:center;padding:30px">
+            <div class="spinner-dark"></div>
+            <p style="margin-top:16px;color:#64748b">正在计算成本消耗预估...</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 成本偏差分析 -->
+      <div id="cost-deviation" class="page-content" style="display:none">
+        <div class="card">
+          <div class="card-title">📊 成本偏差分析</div>
+          <div class="grid-2">
+            <div>
+              <label>选择项目</label>
+              <select id="cost-deviation-project" onchange="loadProjectCostDeviation()">
+                <option value="">请选择项目</option>
+              </select>
+            </div>
+          </div>
+          <div id="cost-deviation-result" style="display:none">
+            <div class="kpi-grid">
+              <div class="kpi-card kpi-blue">
+                <div class="kpi-label">预估成本</div>
+                <div class="kpi-value" id="dev-estimated-cost">—</div>
+                <div class="kpi-unit">元</div>
+              </div>
+              <div class="kpi-card kpi-green">
+                <div class="kpi-label">实际成本</div>
+                <div class="kpi-value" id="dev-actual-cost">—</div>
+                <div class="kpi-unit">元</div>
+              </div>
+              <div class="kpi-card kpi-orange">
+                <div class="kpi-label">成本偏差</div>
+                <div class="kpi-value" id="dev-cost-deviation">—</div>
+                <div class="kpi-unit">元</div>
+              </div>
+              <div class="kpi-card kpi-purple">
+                <div class="kpi-label">偏差率</div>
+                <div class="kpi-value" id="dev-cost-deviation-percent">—</div>
+                <div class="kpi-unit">%</div>
+              </div>
+            </div>
+            <div class="chart-box">
+              <div class="chart-title">成本对比</div>
+              <div class="chart-wrap"><canvas id="cost-comparison-chart"></canvas></div>
+            </div>
+            <div class="card" style="grid-column:1/-1">
+              <div class="card-title">偏差原因分析</div>
+              <ul id="deviation-reasons" style="list-style:none;padding:0"></ul>
+            </div>
+            <div class="card" style="grid-column:1/-1">
+              <div class="card-title">趋势预测</div>
+              <div class="grid-2">
+                <div>
+                  <label>预测最终成本</label>
+                  <input type="text" id="predicted-final-cost" readonly>
+                </div>
+                <div>
+                  <label>预测偏差</label>
+                  <input type="text" id="predicted-deviation" readonly>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div id="cost-deviation-loading" style="display:none;text-align:center;padding:30px">
+            <div class="spinner-dark"></div>
+            <p style="margin-top:16px;color:#64748b">正在分析成本偏差...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// 全局变量
+let currentStep = 1;
+let analysisResult = null;
+let calcResult = null;
+let currentUser = null;
+let projects = [];
+
+// 页面导航
+function switchPage(page) {
+  // 隐藏所有页面
+  document.querySelectorAll('.page-content').forEach(el => {
+    el.style.display = 'none';
+  });
+  // 显示选中页面
+  document.getElementById(page).style.display = 'block';
+  // 更新导航菜单状态
+  document.querySelectorAll('.nav-item').forEach(el => {
+    el.classList.remove('active');
+  });
+  document.querySelector(`.nav-item[data-page="${page}"]`).classList.add('active');
+  
+  // 如果切换到首页，加载项目数据
+  if (page === 'dashboard') {
+    loadProjects();
+  } else if (page === 'cost-estimation' || page === 'cost-deviation') {
+    loadProjectsForSelection();
+  }
+}
+
+// 登录处理
+async function handleLogin(event) {
+  event.preventDefault();
+  const username = document.getElementById('username').value;
+  const password = document.getElementById('password').value;
+  
+  try {
+    const response = await fetch('http://localhost:8501/api/login', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ username, password })
+    });
+    
+    const data = await response.json();
+    if (data.success) {
+      currentUser = data.user;
+      document.getElementById('user-info').textContent = currentUser.username;
+      document.getElementById('login-page').style.display = 'none';
+      document.getElementById('main-app').style.display = 'block';
+      switchPage('dashboard');
+    } else {
+      document.getElementById('login-error').textContent = data.error || '登录失败';
+      document.getElementById('login-error').style.display = 'block';
+    }
+  } catch (error) {
+    document.getElementById('login-error').textContent = '网络错误，请检查服务器是否运行';
+    document.getElementById('login-error').style.display = 'block';
+  }
+}
+
+// 退出登录
+function logout() {
+  currentUser = null;
+  document.getElementById('main-app').style.display = 'none';
+  document.getElementById('login-page').style.display = 'block';
+  document.getElementById('username').value = '';
+  document.getElementById('password').value = '';
+  document.getElementById('login-error').style.display = 'none';
+}
+
+// 加载项目数据
+async function loadProjects() {
+  try {
+    const response = await fetch('http://localhost:8501/api/projects');
+    projects = await response.json();
+    
+    // 更新KPI卡片
+    document.getElementById('total-projects').textContent = projects.length;
+    document.getElementById('active-projects').textContent = projects.filter(p => p.status === '进行中').length;
+    document.getElementById('total-estimated-cost').textContent = (projects.reduce((sum, p) => sum + p.estimated_cost, 0) / 10000).toFixed(0);
+    document.getElementById('total-actual-cost').textContent = (projects.reduce((sum, p) => sum + p.actual_cost, 0) / 10000).toFixed(0);
+    
+    // 生成项目列表
+    const projectList = document.getElementById('project-list');
+    projectList.innerHTML = '';
+    
+    projects.forEach(project => {
+      const card = document.createElement('div');
+      card.className = 'project-card';
+      card.innerHTML = `
+        <div class="project-header">
+          <div class="project-title">${project.name}</div>
+          <div class="project-status status-${project.status === '进行中' ? 'active' : project.status === '已完成' ? 'completed' : 'planning'}">${project.status}</div>
+        </div>
+        <div class="project-info">
+          <div class="project-info-item">
+            <span class="label">项目编号：</span>
+            <span class="value">${project.id}</span>
+          </div>
+          <div class="project-info-item">
+            <span class="label">系统名称：</span>
+            <span class="value">${project.system_name}</span>
+          </div>
+          <div class="project-info-item">
+            <span class="label">项目经理：</span>
+            <span class="value">${project.manager}</span>
+          </div>
+        </div>
+        <div class="project-info">
+          <div class="project-info-item">
+            <span class="label">预估成本：</span>
+            <span class="value">${(project.estimated_cost / 10000).toFixed(2)} 万元</span>
+          </div>
+          <div class="project-info-item">
+            <span class="label">实际成本：</span>
+            <span class="value">${(project.actual_cost / 10000).toFixed(2)} 万元</span>
+          </div>
+          <div class="project-info-item">
+            <span class="label">进度：</span>
+            <span class="value">${project.progress}%</span>
+          </div>
+        </div>
+        <div class="project-actions">
+          <button class="btn btn-sm btn-outline" onclick="switchPage('cost-estimation'); document.getElementById('cost-estimation-project').value = '${project.id}'; loadProjectCostEstimation()">成本预估</button>
+          <button class="btn btn-sm btn-outline" onclick="switchPage('cost-deviation'); document.getElementById('cost-deviation-project').value = '${project.id}'; loadProjectCostDeviation()">偏差分析</button>
+        </div>
+      `;
+      projectList.appendChild(card);
+    });
+  } catch (error) {
+    console.error('加载项目数据失败:', error);
+  }
+}
+
+// 加载项目下拉选择
+async function loadProjectsForSelection() {
+  try {
+    if (projects.length === 0) {
+      const response = await fetch('http://localhost:8501/api/projects');
+      projects = await response.json();
+    }
+    
+    // 更新成本消耗预估项目选择
+    const estimationSelect = document.getElementById('cost-estimation-project');
+    estimationSelect.innerHTML = '<option value="">请选择项目</option>';
+    
+    // 更新成本偏差分析项目选择
+    const deviationSelect = document.getElementById('cost-deviation-project');
+    deviationSelect.innerHTML = '<option value="">请选择项目</option>';
+    
+    projects.forEach(project => {
+      const estimationOption = document.createElement('option');
+      estimationOption.value = project.id;
+      estimationOption.textContent = `${project.name} (${project.id})`;
+      estimationSelect.appendChild(estimationOption);
+      
+      const deviationOption = document.createElement('option');
+      deviationOption.value = project.id;
+      deviationOption.textContent = `${project.name} (${project.id})`;
+      deviationSelect.appendChild(deviationOption);
+    });
+  } catch (error) {
+    console.error('加载项目数据失败:', error);
+  }
+}
+
+// 加载项目成本消耗预估
+async function loadProjectCostEstimation() {
+  const projectId = document.getElementById('cost-estimation-project').value;
+  if (!projectId) return;
+  
+  document.getElementById('cost-estimation-result').style.display = 'none';
+  document.getElementById('cost-estimation-loading').style.display = 'block';
+  
+  try {
+    const response = await fetch(`http://localhost:8501/api/cost-estimation/${projectId}`, {
+      method: 'POST'
+    });
+    const data = await response.json();
+    
+    // 更新KPI卡片
+    document.getElementById('est-total-cost').textContent = data.estimated_total_cost.toLocaleString();
+    document.getElementById('est-consumed-cost').textContent = data.estimated_consumption.toLocaleString();
+    document.getElementById('est-progress').textContent = data.progress;
+    document.getElementById('est-remaining-days').textContent = Math.max(0, data.total_days - data.elapsed_days);
+    
+    // 绘制成本趋势图表
+    const ctx = document.getElementById('cost-trend-chart').getContext('2d');
+    if (window.costTrendChart) {
+      window.costTrendChart.destroy();
+    }
+    window.costTrendChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: data.consumption_trend.map(item => item.progress + '%'),
+        datasets: [{
+          label: '成本消耗（元）',
+          data: data.consumption_trend.map(item => item.cost),
+          borderColor: '#2563eb',
+          backgroundColor: 'rgba(37, 99, 235, 0.1)',
+          tension: 0.4,
+          fill: true
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            display: true,
+            position: 'top'
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: {
+              callback: function(value) {
+                return value.toLocaleString();
+              }
+            }
+          }
+        }
+      }
+    });
+    
+    document.getElementById('cost-estimation-loading').style.display = 'none';
+    document.getElementById('cost-estimation-result').style.display = 'block';
+  } catch (error) {
+    console.error('加载成本消耗预估失败:', error);
+    document.getElementById('cost-estimation-loading').style.display = 'none';
+  }
+}
+
+// 加载项目成本偏差分析
+async function loadProjectCostDeviation() {
+  const projectId = document.getElementById('cost-deviation-project').value;
+  if (!projectId) return;
+  
+  document.getElementById('cost-deviation-result').style.display = 'none';
+  document.getElementById('cost-deviation-loading').style.display = 'block';
+  
+  try {
+    const response = await fetch(`http://localhost:8501/api/cost-deviation/${projectId}`, {
+      method: 'POST'
+    });
+    const data = await response.json();
+    
+    // 更新KPI卡片
+    document.getElementById('dev-estimated-cost').textContent = data.estimated_cost.toLocaleString();
+    document.getElementById('dev-actual-cost').textContent = data.actual_cost.toLocaleString();
+    document.getElementById('dev-cost-deviation').textContent = data.cost_deviation.toLocaleString();
+    document.getElementById('dev-cost-deviation-percent').textContent = data.cost_deviation_percent.toFixed(1);
+    
+    // 绘制成本对比图表
+    const ctx = document.getElementById('cost-comparison-chart').getContext('2d');
+    if (window.costComparisonChart) {
+      window.costComparisonChart.destroy();
+    }
+    window.costComparisonChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: ['预估成本', '实际成本', '预测最终成本'],
+        datasets: [{
+          label: '成本（元）',
+          data: [data.estimated_cost, data.actual_cost, data.predicted_final_cost],
+          backgroundColor: ['#2563eb', '#16a34a', '#f59e0b']
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            display: false
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: {
+              callback: function(value) {
+                return value.toLocaleString();
+              }
+            }
+          }
+        }
+      }
+    });
+    
+    // 更新偏差原因
+    const reasonsList = document.getElementById('deviation-reasons');
+    reasonsList.innerHTML = '';
+    data.deviation_reasons.forEach(reason => {
+      const li = document.createElement('li');
+      li.style.padding = '8px 0';
+      li.style.borderBottom = '1px solid #f1f5f9';
+      li.textContent = `• ${reason}`;
+      reasonsList.appendChild(li);
+    });
+    
+    // 更新趋势预测
+    document.getElementById('predicted-final-cost').value = data.predicted_final_cost.toLocaleString() + ' 元';
+    document.getElementById('predicted-deviation').value = data.predicted_deviation.toLocaleString() + ' 元 (' + data.predicted_deviation_percent.toFixed(1) + '%)';
+    
+    document.getElementById('cost-deviation-loading').style.display = 'none';
+    document.getElementById('cost-deviation-result').style.display = 'block';
+  } catch (error) {
+    console.error('加载成本偏差分析失败:', error);
+    document.getElementById('cost-deviation-loading').style.display = 'none';
+  }
+}
+
+// 步骤导航
+function goStep(step) {
+  currentStep = step;
+  updateStepUI();
+}
+
+function tryGoStep(step) {
+  if (step === 1) {
+    goStep(1);
+  } else if (step === 2) {
+    const displayStyle = document.getElementById('file-name-display').style.display;
+    const hasFile = displayStyle === 'block' || displayStyle === 'inline-block';
+    const hasText = document.getElementById('doc-text').value.trim() !== '';
+    if (hasFile || hasText) {
+      goStep(2);
+    }
+  } else if (step === 3 && analysisResult) {
+    goStep(3);
+  } else if (step === 4 && analysisResult) {
+    goStep(4);
+  } else if (step === 5 && calcResult) {
+    goStep(5);
+  }
+}
+
+function updateStepUI() {
+  // 更新步骤条
+  for (let i = 1; i <= 5; i++) {
+    const stepEl = document.getElementById(`sn-${i}`);
+    if (i < currentStep) {
+      stepEl.classList.add('done');
+      stepEl.classList.remove('active');
+    } else if (i === currentStep) {
+      stepEl.classList.add('active');
+      stepEl.classList.remove('done');
+    } else {
+      stepEl.classList.remove('active', 'done');
+    }
+  }
+  
+  // 更新步骤内容
+  for (let i = 1; i <= 5; i++) {
+    const contentEl = document.getElementById(`step-${i}`);
+    if (i === currentStep) {
+      contentEl.classList.add('active');
+    } else {
+      contentEl.classList.remove('active');
+    }
+  }
+}
+
+// 文件上传处理
+function onUploadAreaClick() {
+  document.getElementById('file-input').click();
+}
+
+function handleFileSelect(input) {
+  const file = input.files[0];
+  if (file) {
+    document.getElementById('file-name-text').textContent = file.name;
+    document.getElementById('file-name-display').style.display = 'inline-block';
+    checkStep1Ready();
+  }
+}
+
+function clearSelectedFile(event) {
+  event.stopPropagation();
+  document.getElementById('file-input').value = '';
+  document.getElementById('file-name-display').style.display = 'none';
+  checkStep1Ready();
+}
+
+function clearDocText(event) {
+  event.stopPropagation();
+  document.getElementById('doc-text').value = '';
+  document.getElementById('doc-text-clear-btn').style.display = 'none';
+  checkStep1Ready();
+}
+
+// 检查步骤1是否准备就绪
+function checkStep1Ready() {
+  const displayStyle = document.getElementById('file-name-display').style.display;
+  const hasFile = displayStyle === 'block' || displayStyle === 'inline-block';
+  const hasText = document.getElementById('doc-text').value.trim() !== '';
+  document.getElementById('step1-next-btn').disabled = !hasFile && !hasText;
+}
+
+// 监听文本输入
+document.getElementById('doc-text').addEventListener('input', function() {
+  const hasText = this.value.trim() !== '';
+  document.getElementById('doc-text-clear-btn').style.display = hasText ? 'block' : 'none';
+  checkStep1Ready();
+});
+
+// 开始分析
+async function startAnalysis() {
+  const projectName = document.getElementById('project-name').value;
+  const projectId = document.getElementById('project-id').value;
+  const systemName = document.getElementById('system-name').value;
+  const teamSize = document.getElementById('team-size-hint').value;
+  
+  // 显示加载状态
+  document.getElementById('analyze-icon').style.display = 'none';
+  document.getElementById('analyze-text').textContent = '分析中...';
+  document.getElementById('analyze-spinner').style.display = 'block';
+  document.getElementById('analyze-error').style.display = 'none';
+  
+  // 准备表单数据
+  const formData = new FormData();
+  
+  // 检查是否有文件上传
+  const fileInput = document.getElementById('file-input');
+  if (fileInput.files.length > 0) {
+    formData.append('file', fileInput.files[0]);
+  } else {
+    // 使用文本输入
+    const docText = document.getElementById('doc-text').value;
+    formData.append('doc_text', docText);
+  }
+  
+  try {
+    const response = await fetch('http://localhost:8501/api/analyze', {
+      method: 'POST',
+      body: formData
+    });
+    
+    const data = await response.json();
+    
+    if (data.error) {
+      document.getElementById('analyze-error').textContent = data.error;
+      document.getElementById('analyze-error').style.display = 'block';
+    } else {
+      analysisResult = data;
+      // 填充项目信息
+      if (data.project_name && !projectName) {
+        document.getElementById('project-name').value = data.project_name;
+      }
+      if (data.system_name && !systemName) {
+        document.getElementById('system-name').value = data.system_name;
+      }
+      // 显示分析结果
+      displayAnalysisResults(data);
+      goStep(3);
+    }
+  } catch (error) {
+    document.getElementById('analyze-error').textContent = '分析失败：' + error.message;
+    document.getElementById('analyze-error').style.display = 'block';
+  } finally {
+    // 恢复按钮状态
+    document.getElementById('analyze-icon').style.display = 'inline';
+    document.getElementById('analyze-text').textContent = '开始AI分析需求';
+    document.getElementById('analyze-spinner').style.display = 'none';
+  }
+}
+
+// 显示分析结果
+function displayAnalysisResults(data) {
+  const modulesContainer = document.getElementById('modules-container');
+  modulesContainer.innerHTML = '';
+  
+  document.getElementById('analysis-summary-badge').textContent = `${data.modules.length} 个模块，${data.modules.reduce((sum, m) => sum + m.functions.length, 0)} 个功能点`;
+  
+  data.modules.forEach((module, moduleIndex) => {
+    const moduleCard = document.createElement('div');
+    moduleCard.className = 'module-card';
+    
+    moduleCard.innerHTML = `
+      <div class="module-header" onclick="toggleModule(${moduleIndex})">
+        <div class="module-title">
+          ${module.name}
+          <span class="module-badge">${module.functions.length} 个功能</span>
+        </div>
+        <div class="module-toggle open" id="module-toggle-${moduleIndex}">▼</div>
+      </div>
+      <div class="module-body open" id="module-body-${moduleIndex}">
+        ${module.functions.map((func, funcIndex) => `
+          <div class="func-row">
+            <div class="func-name">${func.name}</div>
+            <div class="func-cx">
+              <select onchange="updateFunctionComplexity(${moduleIndex}, ${funcIndex}, this.value)">
+                <option value="very_basic" ${func.complexity === 'very_basic' ? 'selected' : ''}>较为基础</option>
+                <option value="basic" ${func.complexity === 'basic' ? 'selected' : ''}>基础</option>
+                <option value="medium" ${func.complexity === 'medium' ? 'selected' : ''}>中等</option>
+                <option value="complex" ${func.complexity === 'complex' ? 'selected' : ''}>复杂</option>
+                <option value="very_complex" ${func.complexity === 'very_complex' ? 'selected' : ''}>极复杂</option>
+              </select>
+            </div>
+            <div class="func-assoc">
+              <select onchange="updateFunctionAssociation(${moduleIndex}, ${funcIndex}, this.value)">
+                <option value="1" ${func.association_systems === 1 ? 'selected' : ''}>1个系统</option>
+                <option value="3" ${func.association_systems === 3 ? 'selected' : ''}>2-5个系统</option>
+                <option value="6" ${func.association_systems === 6 ? 'selected' : ''}>5+个系统</option>
+              </select>
+            </div>
+            <div class="func-del" onclick="deleteFunction(${moduleIndex}, ${funcIndex})">×</div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+    
+    modulesContainer.appendChild(moduleCard);
+  });
+  
+  // 显示分析结果区域
+  document.getElementById('analysis-loading').style.display = 'none';
+  document.getElementById('analysis-results').style.display = 'block';
+  document.getElementById('analysis-error-card').style.display = 'none';
+}
+
+// 切换模块展开/收起
+function toggleModule(moduleIndex) {
+  const body = document.getElementById(`module-body-${moduleIndex}`);
+  const toggle = document.getElementById(`module-toggle-${moduleIndex}`);
+  body.classList.toggle('open');
+  toggle.classList.toggle('open');
+}
+
+// 更新功能点复杂度
+function updateFunctionComplexity(moduleIndex, funcIndex, complexity) {
+  analysisResult.modules[moduleIndex].functions[funcIndex].complexity = complexity;
+}
+
+// 更新功能点关联系统数量
+function updateFunctionAssociation(moduleIndex, funcIndex, association) {
+  analysisResult.modules[moduleIndex].functions[funcIndex].association_systems = parseInt(association);
+}
+
+// 删除功能点
+function deleteFunction(moduleIndex, funcIndex) {
+  analysisResult.modules[moduleIndex].functions.splice(funcIndex, 1);
+  // 如果模块没有功能点了，删除模块
+  if (analysisResult.modules[moduleIndex].functions.length === 0) {
+    analysisResult.modules.splice(moduleIndex, 1);
+  }
+  // 重新显示分析结果
+  displayAnalysisResults(analysisResult);
+}
+
+// 重置参数
+function resetParams() {
+  // 重置复杂度基准值
+  document.getElementById('cb-very-basic').value = 0.5;
+  document.getElementById('cb-basic').value = 1;
+  document.getElementById('cb-medium').value = 1.5;
+  document.getElementById('cb-complex').value = 2;
+  document.getElementById('cb-very-complex').value = 2.5;
+  
+  // 重置流程系数
+  document.getElementById('fc-requirements').value = 0.7;
+  document.getElementById('fc-ui_design').value = 0.3;
+  document.getElementById('fc-tech_design').value = 0.5;
+  document.getElementById('fc-development').value = 1.2;
+  document.getElementById('fc-tech_testing').value = 0.7;
+  document.getElementById('fc-perf_testing').value = 0.3;
+  
+  // 重置技术栈系数
+  document.getElementById('tech-stack-coeff').value = 1.3;
+  
+  // 重置人天单价
+  document.getElementById('rate-product_manager').value = 2000;
+  document.getElementById('rate-ui_designer').value = 1800;
+  document.getElementById('rate-frontend_dev').value = 1800;
+  document.getElementById('rate-backend_dev').value = 2000;
+  document.getElementById('rate-func_tester').value = 1500;
+  document.getElementById('rate-perf_tester').value = 2000;
+  document.getElementById('rate-project_manager').value = 2000;
+  
+  // 重置管理系数
+  document.getElementById('mgmt-coeff').value = 0.15;
+}
+
+// 计算工作量
+async function calculateAndPreview() {
+  // 检查analysisResult是否存在
+  if (!analysisResult) {
+    document.getElementById('calc-error').textContent = '请先上传并分析文档';
+    document.getElementById('calc-error').style.display = 'block';
+    return;
+  }
+  
+  // 收集参数
+  const params = {
+    complexity_base: {
+      very_basic: parseFloat(document.getElementById('cb-very-basic').value),
+      basic: parseFloat(document.getElementById('cb-basic').value),
+      medium: parseFloat(document.getElementById('cb-medium').value),
+      complex: parseFloat(document.getElementById('cb-complex').value),
+      very_complex: parseFloat(document.getElementById('cb-very-complex').value)
+    },
+    flow_coeffs: {
+      requirements: parseFloat(document.getElementById('fc-requirements').value),
+      ui_design: parseFloat(document.getElementById('fc-ui_design').value),
+      tech_design: parseFloat(document.getElementById('fc-tech_design').value),
+      development: parseFloat(document.getElementById('fc-development').value),
+      tech_testing: parseFloat(document.getElementById('fc-tech_testing').value),
+      perf_testing: parseFloat(document.getElementById('fc-perf_testing').value)
+    },
+    tech_stack_coeff: parseFloat(document.getElementById('tech-stack-coeff').value),
+    mgmt_coeff: parseFloat(document.getElementById('mgmt-coeff').value),
+    daily_rates: {
+      product_manager: parseFloat(document.getElementById('rate-product_manager').value),
+      ui_designer: parseFloat(document.getElementById('rate-ui_designer').value),
+      frontend_dev: parseFloat(document.getElementById('rate-frontend_dev').value),
+      backend_dev: parseFloat(document.getElementById('rate-backend_dev').value),
+      func_tester: parseFloat(document.getElementById('rate-func_tester').value),
+      perf_tester: parseFloat(document.getElementById('rate-perf_tester').value),
+      project_manager: parseFloat(document.getElementById('rate-project_manager').value)
+    }
+  };
+  
+  // 显示加载状态
+  document.getElementById('calc-text').textContent = '计算中...';
+  document.getElementById('calc-spinner').style.display = 'block';
+  document.getElementById('calc-error').style.display = 'none';
+  
+  try {
+    const response = await fetch('http://localhost:8501/api/estimate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        modules: analysisResult.modules,
+        params: params
+      })
+    });
+    
+    const data = await response.json();
+    
+    if (data.error) {
+      document.getElementById('calc-error').textContent = data.error;
+      document.getElementById('calc-error').style.display = 'block';
+    } else {
+      calcResult = data;
+      displayCalculationResults(data);
+      goStep(5);
+    }
+  } catch (error) {
+    document.getElementById('calc-error').textContent = '计算失败：' + error.message;
+    document.getElementById('calc-error').style.display = 'block';
+  } finally {
+    // 恢复按钮状态
+    document.getElementById('calc-text').textContent = '计算工作量';
+    document.getElementById('calc-spinner').style.display = 'none';
+  }
+}
+
+// 显示计算结果
+function displayCalculationResults(data) {
+  // 更新KPI卡片
+  document.getElementById('kpi-days').textContent = data.total_days.toFixed(2);
+  document.getElementById('kpi-months').textContent = data.total_months.toFixed(2);
+  document.getElementById('kpi-cost').textContent = (data.team_costs.total_cost / 10000).toFixed(2);
+  document.getElementById('kpi-modules').textContent = analysisResult ? analysisResult.modules.length : 0;
+  
+  // 更新项目信息
+  document.getElementById('result-project-badge').textContent = `${document.getElementById('project-name').value || '未命名项目'} (${document.getElementById('project-id').value || '无编号'})`;
+  
+  // 绘制团队工作量分布饼图
+  const pieCtx = document.getElementById('pie-chart').getContext('2d');
+  if (window.pieChart) {
+    window.pieChart.destroy();
+  }
+  window.pieChart = new Chart(pieCtx, {
+    type: 'pie',
+    data: {
+      labels: Object.values(data.team_costs).filter(item => typeof item === 'object' && item.label).map(item => item.label),
+      datasets: [{
+        data: Object.values(data.team_costs).filter(item => typeof item === 'object' && item.cost).map(item => item.cost),
+        backgroundColor: ['#2563eb', '#16a34a', '#f59e0b', '#7c3aed', '#dc2626']
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'bottom'
+        }
+      }
+    }
+  });
+  
+  // 绘制各阶段工作量柱状图
+  const barCtx = document.getElementById('bar-chart').getContext('2d');
+  if (window.barChart) {
+    window.barChart.destroy();
+  }
+  window.barChart = new Chart(barCtx, {
+    type: 'bar',
+    data: {
+      labels: Object.keys(data.phase_totals),
+      datasets: [{
+        label: '工作量（人天）',
+        data: Object.values(data.phase_totals),
+        backgroundColor: '#2563eb'
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          display: false
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true
+        }
+      }
+    }
+  });
+  
+  // 生成总览表格
+  const overviewTable = document.createElement('table');
+  overviewTable.className = 'data-table';
+  overviewTable.innerHTML = `
+    <thead><tr><th>阶段</th><th>工作量（人天）</th><th>占比</th></tr></thead>
+    <tbody>
+      ${Object.entries(data.phase_totals).map(([phase, days]) => {
+        const percentage = ((days / data.total_days) * 100).toFixed(1);
+        return `<tr><td>${phase}</td><td class="num">${days.toFixed(2)}</td><td class="pct">${percentage}%</td></tr>`;
+      }).join('')}
+      <tr style="font-weight:bold;background:#f1f5f9"><td>总计</td><td class="num">${data.total_days.toFixed(2)}</td><td class="pct">100%</td></tr>
+    </tbody>
+  `;
+  document.getElementById('overview-table-wrap').innerHTML = '';
+  document.getElementById('overview-table-wrap').appendChild(overviewTable);
+  
+  // 生成详细分析表格
+  const detailTableBody = document.getElementById('detail-table-body');
+  detailTableBody.innerHTML = '';
+  const items = data.items || [];
+  items.forEach(item => {
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td>${item.phase}</td>
+      <td>${item.module}</td>
+      <td>${item.function}</td>
+      <td class="num">${item.workload.toFixed(2)}</td>
+      <td>${getComplexityLabel(item.complexity)}</td>
+    `;
+    detailTableBody.appendChild(row);
+  });
+  
+  // 生成团队成本网格
+  const teamCostsGrid = document.getElementById('team-costs-grid');
+  teamCostsGrid.innerHTML = '';
+  Object.values(data.team_costs).filter(item => typeof item === 'object' && item.label).forEach(item => {
+    const costCard = document.createElement('div');
+    costCard.className = 'cost-card';
+    costCard.innerHTML = `
+      <div class="cost-card-label">${item.label}</div>
+      <div class="cost-card-days">${item.days.toFixed(2)} 人天</div>
+      <div class="cost-card-cost">¥ ${item.cost.toLocaleString()}</div>
+    `;
+    teamCostsGrid.appendChild(costCard);
+  });
+  document.getElementById('total-cost-value').textContent = '¥ ' + data.team_costs.total_cost.toLocaleString();
+  
+  // 生成合规校验表格
+  const complianceTableBody = document.getElementById('compliance-table-body');
+  complianceTableBody.innerHTML = '';
+  Object.entries(data.compliance.details).forEach(([phase, detail]) => {
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td>${phase}</td>
+      <td class="num">${detail.days.toFixed(2)}</td>
+      <td class="pct">${detail.pct}%</td>
+      <td>${detail.min}% - ${detail.max}%</td>
+      <td>${detail.pass ? '<span class="badge-pass">通过</span>' : '<span class="badge-fail">超出</span>'}</td>
+    `;
+    complianceTableBody.appendChild(row);
+  });
+  
+  // 生成计算轨迹
+  const tracesContainer = document.getElementById('traces-container');
+  tracesContainer.innerHTML = '';
+  data.traces.forEach((trace, index) => {
+    const traceCard = document.createElement('div');
+    traceCard.className = 'trace-card';
+    traceCard.innerHTML = `
+      <div class="trace-header" onclick="toggleTrace(${index})">
+        <span>${trace.module} - ${trace.function}</span>
+        <span class="trace-toggle" id="trace-toggle-${index}">▼</span>
+      </div>
+      <div class="trace-body" id="trace-body-${index}">
+        <div class="trace-row"><span class="trace-key">复杂度：</span><span class="trace-val">${getComplexityLabel(trace.complexity)}</span></div>
+        <div class="trace-row"><span class="trace-key">基准人天：</span><span class="trace-val">${trace.base} 天</span></div>
+        <div class="trace-row"><span class="trace-key">关联度：</span><span class="trace-val">${trace.assoc} (${trace.assoc_systems || 1}个系统)</span></div>
+        <div class="trace-row"><span class="trace-key">技术栈：</span><span class="trace-val">${trace.tech_stack}</span></div>
+        <div class="trace-row"><span class="trace-key">管理系数：</span><span class="trace-val">${trace.mgmt}</span></div>
+        ${Object.entries(trace.phases).map(([phase, data]) => `
+          <div class="trace-row"><span class="trace-key">${phase}：</span><span class="trace-val">${data.workload.toFixed(2)} 人天</span></div>
+        `).join('')}
+      </div>
+    `;
+    tracesContainer.appendChild(traceCard);
+  });
+}
+
+// 切换轨迹展开/收起
+function toggleTrace(index) {
+  const body = document.getElementById(`trace-body-${index}`);
+  const toggle = document.getElementById(`trace-toggle-${index}`);
+  body.classList.toggle('open');
+  toggle.classList.toggle('open');
+}
+
+// 获取复杂度标签
+function getComplexityLabel(complexity) {
+  const labels = {
+    very_basic: '<span class="cx-very-basic">较为基础</span>',
+    basic: '<span class="cx-basic">基础</span>',
+    medium: '<span class="cx-medium">中等</span>',
+    complex: '<span class="cx-complex">复杂</span>',
+    very_complex: '<span class="cx-very-complex">极复杂</span>'
+  };
+  return labels[complexity] || complexity;
+}
+
+// 切换标签页
+function switchTab(tab) {
+  // 隐藏所有标签内容
+  document.querySelectorAll('.tab-content').forEach(el => {
+    el.classList.remove('active');
+  });
+  // 显示选中标签内容
+  document.getElementById(`tab-${tab}`).classList.add('active');
+  // 更新标签按钮状态
+  document.querySelectorAll('.tab-btn').forEach(el => {
+    el.classList.remove('active');
+  });
+  document.querySelector(`.tab-btn[onclick="switchTab('${tab}')"]`).classList.add('active');
+}
+
+// 下载Excel报告
+async function downloadExcel() {
+  try {
+    const response = await fetch('http://localhost:8501/api/generate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        modules: analysisResult.modules,
+        project_name: document.getElementById('project-name').value,
+        project_id: document.getElementById('project-id').value,
+        system_name: document.getElementById('system-name').value,
+        params: {
+          complexity_base: {
+            very_basic: parseFloat(document.getElementById('cb-very-basic').value),
+            basic: parseFloat(document.getElementById('cb-basic').value),
+            medium: parseFloat(document.getElementById('cb-medium').value),
+            complex: parseFloat(document.getElementById('cb-complex').value),
+            very_complex: parseFloat(document.getElementById('cb-very-complex').value)
+          },
+          flow_coeffs: {
+            requirements: parseFloat(document.getElementById('fc-requirements').value),
+            ui_design: parseFloat(document.getElementById('fc-ui_design').value),
+            tech_design: parseFloat(document.getElementById('fc-tech_design').value),
+            development: parseFloat(document.getElementById('fc-development').value),
+            tech_testing: parseFloat(document.getElementById('fc-tech_testing').value),
+            perf_testing: parseFloat(document.getElementById('fc-perf_testing').value)
+          },
+          tech_stack_coeff: parseFloat(document.getElementById('tech-stack-coeff').value),
+          mgmt_coeff: parseFloat(document.getElementById('mgmt-coeff').value),
+          daily_rates: {
+            product_manager: parseFloat(document.getElementById('rate-product_manager').value),
+            ui_designer: parseFloat(document.getElementById('rate-ui_designer').value),
+            frontend_dev: parseFloat(document.getElementById('rate-frontend_dev').value),
+            backend_dev: parseFloat(document.getElementById('rate-backend_dev').value),
+            func_tester: parseFloat(document.getElementById('rate-func_tester').value),
+            perf_tester: parseFloat(document.getElementById('rate-perf_tester').value),
+            project_manager: parseFloat(document.getElementById('rate-project_manager').value)
+          }
+        }
+      })
+    });
+    
+    if (response.ok) {
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `工作量评估报告_${document.getElementById('project-name').value || '未命名'}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } else {
+      alert('下载失败，请重试');
+    }
+  } catch (error) {
+    console.error('下载Excel失败:', error);
+    alert('下载失败，请检查服务器是否运行');
+  }
+}
+
+// 初始化
+function init() {
+  // 初始化导航菜单点击事件
+  document.querySelectorAll('.nav-item').forEach(item => {
+    item.addEventListener('click', function() {
+      const page = this.getAttribute('data-page');
+      switchPage(page);
+    });
+  });
+  
+  // 初始化步骤1检查
+  checkStep1Ready();
+}
+
+// 页面加载完成后初始化
+window.onload = init;
+</script>
+</body>
+</html>

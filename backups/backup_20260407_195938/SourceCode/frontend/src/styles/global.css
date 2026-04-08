@@ -1,0 +1,93 @@
+/* 全局样式 */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  width: 100%;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
+    'Noto Color Emoji';
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #f5f5f5;
+}
+
+/* 滚动条样式 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* 主色变量 */
+:root {
+  --primary-color: #165DFF;
+  --success-color: #00B42A;
+  --warning-color: #FF7D00;
+  --error-color: #F53F3F;
+  --text-color: #1D2129;
+  --text-secondary: #4E5969;
+  --border-color: #E5E6EB;
+  --background-color: #F7F8FA;
+}
+
+/* 布局间距 */
+.page-container {
+  padding: 24px;
+  background-color: #F7F8FA;
+  min-height: 100%;
+}
+
+/* 卡片间距 */
+.card-margin {
+  margin-bottom: 24px;
+}
+
+/* 异常数据标红 */
+.text-danger {
+  color: #F53F3F !important;
+}
+
+/* 成功数据标绿 */
+.text-success {
+  color: #00B42A !important;
+}
+
+/* 数字高亮 */
+.number-highlight {
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--primary-color);
+}
+
+/* 空状态 */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px;
+  color: #86909C;
+}

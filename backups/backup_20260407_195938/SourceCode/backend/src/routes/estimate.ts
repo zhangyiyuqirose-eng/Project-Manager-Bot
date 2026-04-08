@@ -74,14 +74,13 @@ const DEFAULT_COMPLEXITY_CONFIG: Record<string, number> = {
   very_complex: 2.5
 }
 
-// 流程系数（对齐参考代码）
 const DEFAULT_FLOW_COEFFICIENTS: Record<string, number> = {
-  requirements: 0.7,   // 需求阶段
-  ui_design: 0.3,      // UI设计阶段
-  tech_design: 0.5,    // 技术设计阶段
-  development: 1.2,    // 开发阶段
-  tech_testing: 0.7,   // 技术测试阶段
-  perf_testing: 0.3    // 性能测试阶段
+  requirements: 0.7,
+  ui_design: 0.3,
+  tech_design: 0.5,
+  development: 1.2,
+  tech_testing: 0.7,
+  perf_testing: 0.3
 }
 
 const DEFAULT_TECH_STACK_COEFFICIENT = 1.3
@@ -98,8 +97,7 @@ const DEFAULT_DAILY_RATES: Record<string, number> = {
   project_manager: 2000
 }
 
-// 阶段定义（v2.1：严格对齐需求方案公式，仅含6个计算阶段，投产上线为固定比例追加）
-// usesTechStack: 是否乘以技术栈难度系数
+// 阶段定义
 const PHASES = [
   { key: 'requirements', name: '需求', usesTechStack: false },
   { key: 'ui_design', name: 'UI设计', usesTechStack: false },
@@ -107,17 +105,16 @@ const PHASES = [
   { key: 'development', name: '开发', usesTechStack: true },
   { key: 'tech_testing', name: '技术测试', usesTechStack: true },
   { key: 'perf_testing', name: '性能测试', usesTechStack: false }
-  // 投产上线 = Σ(需求+设计+研发+技测+性测) × 2%，总计算后追加
 ]
 
-// 阶段合规区间（占总人天百分比）- 对齐参考代码
+// 合规区间
 const COMPLIANCE_RANGES: Record<string, [number, number]> = {
-  '需求': [12, 18],     // 需求阶段占比区间
-  '设计': [12, 20],     // UI设计+技术设计合并
-  '开发': [30, 40],     // 开发阶段占比区间
-  '技术测试': [15, 25], // 技术测试占比区间
-  '性能测试': [0, 12],  // 性能测试占比区间
-  '投产上线': [2, 2]    // 投产上线固定2%
+  '需求': [12, 18],
+  '设计': [12, 20],
+  '开发': [30, 40],
+  '技术测试': [15, 25],
+  '性能测试': [0, 12],
+  '投产上线': [2, 2]
 }
 
 // ==================== 辅助函数 ====================

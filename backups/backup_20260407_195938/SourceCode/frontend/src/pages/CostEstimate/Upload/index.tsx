@@ -26,7 +26,7 @@ import { estimateApi } from '@/api'
 const { Title, Text, Paragraph } = Typography
 const { Dragger } = Upload
 
-// 步骤条配置（5步）- 对齐参考代码：上传->项目信息->AI分析->参数配置->结果
+// 步骤条配置（4步）- 调整顺序：上传->解析->配置->结果
 const stepItems = [
   {
     title: '文件上传',
@@ -34,13 +34,8 @@ const stepItems = [
     icon: <FileTextOutlined />,
   },
   {
-    title: '项目信息',
-    description: '填写项目信息',
-    icon: <RocketOutlined />,
-  },
-  {
-    title: 'AI分析',
-    description: '审核功能列表',
+    title: '文档解析',
+    description: '查看功能点详情',
     icon: <FileSearchOutlined />,
   },
   {
@@ -49,7 +44,7 @@ const stepItems = [
     icon: <SettingOutlined />,
   },
   {
-    title: '结果报告',
+    title: '结果展示',
     description: '查看成本预估',
     icon: <BarChartOutlined />,
   },

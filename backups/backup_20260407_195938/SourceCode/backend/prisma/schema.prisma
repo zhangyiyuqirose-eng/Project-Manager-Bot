@@ -1,0 +1,174 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id              Int             @id @default(autoincrement())
+  username        String          @unique
+  passwordHash    String          @map("password_hash")
+  name            String
+  email           String?
+  role            String          @default("pm")
+  status          String          @default("active")
+  loginErrorCount Int             @default(0) @map("login_error_count")
+  lockEndTime     DateTime?       @map("lock_end_time")
+  lastLoginTime   DateTime?       @map("last_login_time")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+  operationLogs   OperationLog[]
+  paramTemplates  ParamTemplate[]
+  projects        Project[]
+
+  @@map("users")
+}
+
+model OperationLog {
+  id               Int      @id @default(autoincrement())
+  userId           Int      @map("user_id")
+  operationType    String   @map("operation_type")
+  operationContent String?  @map("operation_content")
+  ipAddress        String?  @map("ip_address")
+  createdAt        DateTime @default(now()) @map("created_at")
+  user             User     @relation(fields: [userId], references: [id])
+
+  @@map("operation_logs")
+}
+
+model ParamTemplate {
+  id            Int      @id @default(autoincrement())
+  userId        Int      @map("user_id")
+  templateName  String   @map("template_name")
+  configContent String   @map("config_content")
+  isDefault     Boolean  @default(false) @map("is_default")
+  createdAt     DateTime @default(now()) @map("created_at")
+  user          User     @relation(fields: [userId], references: [id])
+
+  @@map("param_templates")
+}
+
+model Project {
+  id              Int               @id @default(autoincrement())
+  userId          Int               @map("user_id")
+  projectName     String            @map("project_name")
+  projectType     String?           @map("project_type")
+  contractAmount  Float?            @map("contract_amount")
+  status          String            @default("ongoing")
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+  deviations      CostDeviation[]
+  estimateConfigs EstimateConfig[]
+  estimateResults EstimateResult[]
+  costs           ProjectCost[]
+  documents       ProjectDocument[]
+  members         ProjectMember[]
+  user            User              @relation(fields: [userId], references: [id])
+
+  @@map("projects")
+}
+
+model ProjectDocument {
+  id          Int      @id @default(autoincrement())
+  projectId   Int      @map("project_id")
+  docName     String   @map("doc_name")
+  docPath     String?  @map("doc_path")
+  docType     String   @default("requirement") @map("doc_type")
+  parseStatus String   @default("pending") @map("parse_status")
+  parseResult String?  @map("parse_result")
+  createdAt   DateTime @default(now()) @map("created_at")
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("project_documents")
+}
+
+model EstimateConfig {
+  id                    Int      @id @default(autoincrement())
+  projectId             Int      @map("project_id")
+  complexityConfig      String?  @map("complexity_config")
+  systemCoefficient     String?  @map("system_coefficient")
+  processCoefficient    String?  @map("process_coefficient")
+  techStackCoefficient  String?  @map("tech_stack_coefficient")
+  unitPriceConfig       String?  @map("unit_price_config")
+  managementCoefficient Float    @default(0.2) @map("management_coefficient")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+  project               Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("estimate_configs")
+}
+
+model EstimateResult {
+  id          Int      @id @default(autoincrement())
+  projectId   Int      @map("project_id")
+  totalManDay Float    @map("total_man_day")
+  totalCost   Float    @map("total_cost")
+  moduleCount Int      @default(0) @map("module_count")
+  manMonth    Float    @map("man_month")
+  stageDetail String?  @map("stage_detail")
+  teamDetail  String?  @map("team_detail")
+  calcTrace   String?  @map("calc_trace")
+  createdAt   DateTime @default(now()) @map("created_at")
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("estimate_results")
+}
+
+model ProjectMember {
+  id            Int       @id @default(autoincrement())
+  projectId     Int       @map("project_id")
+  name          String
+  level         String
+  dailyCost     Float     @map("daily_cost")
+  role          String?
+  entryTime     DateTime? @map("entry_time")
+  leaveTime     DateTime? @map("leave_time")
+  reportedHours Float?    @map("reported_hours")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  project       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("project_members")
+}
+
+model ProjectCost {
+  id                   Int       @id @default(autoincrement())
+  projectId            Int       @map("project_id")
+  contractAmount       Float     @map("contract_amount")
+  preSaleRatio         Float     @default(0) @map("pre_sale_ratio")
+  taxRate              Float     @default(0.06) @map("tax_rate")
+  externalLaborCost    Float     @default(0) @map("external_labor_cost")
+  externalSoftwareCost Float     @default(0) @map("external_software_cost")
+  currentManpowerCost  Float     @default(0) @map("current_manpower_cost")
+  availableCost        Float     @default(0) @map("available_cost")
+  dailyManpowerCost    Float     @default(0) @map("daily_manpower_cost")
+  availableDays        Int       @default(0) @map("available_days")
+  burnoutDate          DateTime? @map("burnout_date")
+  calcTime             DateTime? @map("calc_time")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+  project              Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("project_costs")
+}
+
+model CostDeviation {
+  id                     Int      @id @default(autoincrement())
+  projectId              Int      @map("project_id")
+  totalContractAmount    Float    @map("total_contract_amount")
+  currentCostConsumption Float    @default(0) @map("current_cost_consumption")
+  taskProgress           Float    @default(0) @map("task_progress")
+  costDeviation          Float    @default(0) @map("cost_deviation")
+  baselineType           String   @default("default") @map("baseline_type")
+  baselineConfig         String?  @map("baseline_config")
+  expectedStages         String?  @map("expected_stages")
+  actualStages           String?  @map("actual_stages")
+  teamCosts              String?  @map("team_costs")
+  aiSuggestion           String?  @map("ai_suggestion")
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
+  project                Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("cost_deviations")
+}

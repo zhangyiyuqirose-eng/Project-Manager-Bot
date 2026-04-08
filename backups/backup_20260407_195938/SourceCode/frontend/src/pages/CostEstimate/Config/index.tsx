@@ -48,7 +48,7 @@ import type {
 
 const { Title, Text } = Typography
 
-// 步骤条配置（5步）- 对齐参考代码：上传->项目信息->AI分析->参数配置->结果
+// 步骤条配置（4步）- 调整顺序：上传->解析->配置->结果
 const stepItems = [
   {
     title: '文件上传',
@@ -56,14 +56,9 @@ const stepItems = [
     icon: <FileTextOutlined />,
   },
   {
-    title: '项目信息',
-    description: '填写项目信息',
+    title: '文档解析',
+    description: '查看功能点详情',
     icon: <FileSearchOutlined />,
-  },
-  {
-    title: 'AI分析',
-    description: '审核功能列表',
-    icon: <CalculatorOutlined />,
   },
   {
     title: '参数配置',
@@ -71,7 +66,7 @@ const stepItems = [
     icon: <SettingOutlined />,
   },
   {
-    title: '结果报告',
+    title: '结果展示',
     description: '查看成本预估',
     icon: <BarChartOutlined />,
   },
@@ -95,7 +90,7 @@ export default function CostEstimateConfig() {
   const [searchParams] = useSearchParams()
   const projectId = searchParams.get('projectId')
 
-  const [currentStep] = useState(3)  // 步骤4：参数配置
+  const [currentStep] = useState(2)  // 步骤3：参数配置
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
 
@@ -104,42 +99,12 @@ export default function CostEstimateConfig() {
   const [projectsLoading, setProjectsLoading] = useState(false)
   const [totalProjects, setTotalProjects] = useState(0)
 
-  // 参数配置
-  const [complexityConfig, setComplexityConfig] = useState<ComplexityLevel[]>([
-    { level: '较为基础', workdays: 0.5 },
-    { level: '基础', workdays: 1.0 },
-    { level: '中等', workdays: 1.5 },
-    { level: '复杂', workdays: 2.0 },
-    { level: '极复杂', workdays: 2.5 },
-  ])
-  const [systemCoefficientConfig, setSystemCoefficientConfig] = useState<SystemCoefficient[]>([
-    { systemCount: 1, coefficient: 1.0 },
-    { systemCount: 3, coefficient: 1.5 },
-    { systemCount: 6, coefficient: 2.0 },
-  ])
-  const [processCoefficientConfig, setProcessCoefficientConfig] = useState<ProcessCoefficient[]>([
-    { stage: '需求', coefficient: 0.7 },
-    { stage: 'UI设计', coefficient: 0.3 },
-    { stage: '技术设计', coefficient: 0.5 },
-    { stage: '开发', coefficient: 1.2 },
-    { stage: '技术测试', coefficient: 0.7 },
-    { stage: '性能测试', coefficient: 0.3 },
-  ])
-  const [techStackCoefficientConfig, setTechStackCoefficientConfig] = useState<TechStackCoefficient[]>([
-    { techType: '常规技术栈', coefficient: 1.0 },
-    { techType: '微服务架构', coefficient: 1.3 },
-    { techType: 'AI中台', coefficient: 1.4 },
-    { techType: '分布式事务', coefficient: 1.6 },
-  ])
-  const [unitPriceConfig, setUnitPriceConfig] = useState<UnitPrice[]>([
-    { role: '产品经理', price: 2000 },
-    { role: 'UI设计师', price: 1800 },
-    { role: '前端开发', price: 1800 },
-    { role: '后端开发', price: 2000 },
-    { role: '功能测试', price: 1500 },
-    { role: '性能测试', price: 2000 },
-    { role: '项目经理', price: 2000 },
-  ])
+  // 配置数据
+  const [complexityConfig, setComplexityConfig] = useState<ComplexityLevel[]>([])
+  const [systemCoefficientConfig, setSystemCoefficientConfig] = useState<SystemCoefficient[]>([])
+  const [processCoefficientConfig, setProcessCoefficientConfig] = useState<ProcessCoefficient[]>([])
+  const [techStackCoefficientConfig, setTechStackCoefficientConfig] = useState<TechStackCoefficient[]>([])
+  const [unitPriceConfig, setUnitPriceConfig] = useState<UnitPrice[]>([])
   const [managementCoefficient, setManagementCoefficient] = useState<number>(0.15)
 
   // 弹窗状态
@@ -478,11 +443,11 @@ export default function CostEstimateConfig() {
       width: 120,
       render: (value: string) => {
         const colors: Record<string, string> = {
-          '较为基础': '#16a34a',
-          '基础': '#15803d',
-          '中等': '#d97706',
-          '复杂': '#b91c1c',
-          '极复杂': '#7f1d1d',
+          '简单': '#10B981',
+          '一般': '#3B82F6',
+          '中等': '#F59E0B',
+          '复杂': '#EF4444',
+          '极复杂': '#8B5CF6',
         }
         return (
           <Tag
@@ -507,9 +472,8 @@ export default function CostEstimateConfig() {
       width: 120,
       render: (value: number, _: ComplexityLevel, index: number) => (
         <InputNumber
-          min={0.5}
-          max={15}
-          step={0.5}
+          min={1}
+          max={30}
           value={value}
           onChange={(val) => {
             const newConfig = [...complexityConfig]
