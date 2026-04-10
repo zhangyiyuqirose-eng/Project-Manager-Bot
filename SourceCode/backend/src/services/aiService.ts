@@ -495,51 +495,15 @@ ${data.teamCosts.map(t => `- ${t.team}: 预期${t.expected}万, 实际${t.actual
   /**
    * 使用 DeepSeek-OCR 服务识别偏差截图（推荐）
    */
+  /**
+   * 使用 DeepSeek-OCR 服务识别偏差截图（推荐）
+   */
   private async recognizeScreenshotsWithDeepSeek(
     screenshots: { type: string; base64: string }[]
   ): Promise<DeviationAnalysisResult> {
-    const systemPrompt = `### 一、核心任务
-从图片中精准提取项目关键信息，仅输出**标准JSON格式**，禁止任何额外说明、解释、思考过程。
-
-### 二、必须提取的字段（严格对应key名，不可修改）
-| key名               | 数据类型 | 说明                                                                 |
-|---------------------|----------|----------------------------------------------------------------------|
-| project_name        | string   | 项目名称，提取图片中明确的项目全称，无则返回空字符串""                |
-| contract_amount     | number   | 合同金额，提取数字部分（单位：万元），无则返回null                    |
-| labor_cost          | number   | 当前人力成本，提取数字部分（单位：万元），无则返回null                 |
-| devops_progress     | number   | DevOps进度，提取百分比数字（仅数值，不带%），无则返回null             |
-| project_start_date  | string   | 项目启动日期（格式：YYYY-MM-DD），无则返回空字符串""                   |
-| project_end_date    | string   | 项目预计结束日期（格式：YYYY-MM-DD），无则返回空字符串""               |
-
-### 三、严格执行规则
-1.  **格式强制要求**：仅输出合法JSON，不得有任何多余字符（如注释、说明），确保前端可直接解析。
-2.  **单位统一规则**：
-    - 金额统一提取**万元为单位的数字**（如图片写"100万"返回100）
-    - 进度统一提取**纯数字**（如图片写"85%"返回85）
-    - 日期统一提取为YYYY-MM-DD格式，无则返回空字符串
-3.  **缺省处理规则**：图片中未出现的字段，严格返回对应缺省值，不得编造数据。
-4.  **多图处理规则**：若上传多张图片，合并提取所有有效信息，以最明确、最新的信息为准，冲突时以最新数据为准。
-5.  **OCR容错规则**：识别图片中的印刷体/手写体文字，优先提取表格、标题、标注中的关键数据，忽略水印、广告、无关备注等干扰信息。
-6.  **数据校验规则**：
-    - 金额、进度必须为数字类型，不得为字符串
-    - 进度数值范围0-100，超出范围按实际提取，不做修改
-    - 项目名称不得包含特殊字符，仅保留中文、英文、数字、括号
-
-### 四、输出示例（仅参考格式，禁止直接输出）
-{
-  "project_name": "XX银行核心系统升级项目V2.0",
-  "contract_amount": 500,
-  "labor_cost": 280.5,
-  "devops_progress": 75,
-  "project_start_date": "2025-01-15",
-  "project_end_date": "2025-12-31"
-}
-
-### 五、禁止行为
-- 禁止输出任何非JSON内容，包括但不限于："以下是提取结果"、"注意事项"、"识别说明"
-- 禁止编造不存在的字段和数据
-- 禁止修改key名，必须严格使用指定key
-- 禁止添加额外字段，仅保留指定字段`
+    const systemPrompt = `从图片中提取项目信息，仅输出JSON格式。
+返回格式：{"project_name":"项目名称","contract_amount":合同金额数字,"labor_cost":人力成本数字,"devops_progress":进度数字}
+规则：金额单位万元，进度0-100，未找到返回null，仅输出JSON。`
 
     const results: DeviationAnalysisResult = {
       projectName: '',
@@ -550,23 +514,9 @@ ${data.teamCosts.map(t => `- ${t.team}: 预期${t.expected}万, 实际${t.actual
       suggestion: ''
     }
 
-    // 处理每张截图
     for (const screenshot of screenshots) {
       try {
         console.log(`[AI Service] DeepSeek-OCR 正在识别 ${screenshot.type} 类型截图`)
-
-        // 构建请求消息
-        const userContent: any[] = [
-          { type: 'text', text: '请识别并提取图片中的项目关键信息。' }
-        ]
-
-        // 添加图片
-        userContent.push({
-          type: 'image_url',
-          image_url: {
-            url: `data:image/png;base64,${screenshot.base64}`
-          }
-        })
 
         const response = await axios.post<AIResponse>(
           this.ocrApiUrl,
@@ -574,9 +524,16 @@ ${data.teamCosts.map(t => `- ${t.team}: 预期${t.expected}万, 实际${t.actual
             model: this.ocrModel,
             temperature: 0.3,
             stream: false,
+            max_tokens: 500,
             messages: [
               { role: 'system', content: systemPrompt },
-              { role: 'user', content: userContent }
+              {
+                role: 'user',
+                content: [
+                  { type: 'text', text: '提取图片中的项目信息' },
+                  { type: 'image_url', image_url: { url: `data:image/png;base64,${screenshot.base64}` } }
+                ]
+              }
             ]
           },
           {
@@ -590,48 +547,30 @@ ${data.teamCosts.map(t => `- ${t.team}: 预期${t.expected}万, 实际${t.actual
 
         if (response.data.choices && response.data.choices.length > 0) {
           const text = response.data.choices[0].message.content
-          console.log(`[AI Service] ${screenshot.type} 截图识别返回长度: ${text.length}`)
-          console.log(`[AI Service] 返回内容:`, text.substring(0, 500))
+          console.log(`[AI Service] ${screenshot.type} 返回:`, text.substring(0, 200))
 
-          // 尝试提取 JSON
           const jsonMatch = text.match(/\{[\s\S]*\}/)
           if (jsonMatch) {
             try {
               const parsed = JSON.parse(jsonMatch[0])
-              console.log(`[AI Service] 解析结果:`, JSON.stringify(parsed))
-              
-              // 合并结果，优先使用非空值
-              if (parsed.project_name && !results.projectName) {
-                results.projectName = parsed.project_name
-              }
-              if (parsed.contract_amount !== null && parsed.contract_amount !== undefined && !results.contractAmount) {
-                results.contractAmount = Number(parsed.contract_amount)
-              }
-              if (parsed.labor_cost !== null && parsed.labor_cost !== undefined && !results.currentManpowerCost) {
-                results.currentManpowerCost = Number(parsed.labor_cost)
-              }
-              if (parsed.devops_progress !== null && parsed.devops_progress !== undefined && !results.taskProgress) {
-                results.taskProgress = Number(parsed.devops_progress)
-              }
-            } catch (parseError) {
-              console.error(`[AI Service] JSON 解析失败:`, parseError)
+              if (parsed.project_name && !results.projectName) results.projectName = parsed.project_name
+              if (parsed.contract_amount && !results.contractAmount) results.contractAmount = Number(parsed.contract_amount)
+              if (parsed.labor_cost && !results.currentManpowerCost) results.currentManpowerCost = Number(parsed.labor_cost)
+              if (parsed.devops_progress && !results.taskProgress) results.taskProgress = Number(parsed.devops_progress)
+            } catch (e) {
+              console.error(`[AI Service] JSON 解析失败`)
             }
-          } else {
-            console.error(`[AI Service] 未找到 JSON 内容`) 
           }
         }
       } catch (error: any) {
-        console.error(`[AI Service] ${screenshot.type} 截图识别错误:`, error?.response?.data || error?.message)
+        console.error(`[AI Service] ${screenshot.type} 识别错误:`, error?.response?.data || error?.message)
       }
     }
 
-    console.log(`[AI Service] DeepSeek-OCR 偏差截图识别完成:`, JSON.stringify(results))
+    console.log(`[AI Service] DeepSeek-OCR 完成:`, JSON.stringify(results))
     return results
   }
 
-  /**
-   * 使用本地 PaddleOCR 服务识别偏差截图
-   */
   private async recognizeScreenshotsWithPaddleOCR(
     screenshots: { type: string; base64: string }[]
   ): Promise<DeviationAnalysisResult> {
