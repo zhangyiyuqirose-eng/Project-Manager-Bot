@@ -75,6 +75,8 @@ const breadcrumbMap: Record<string, string> = {
   '/dashboard': '首页',
   '/cost-estimate': '成本预估',
   '/cost-estimate/upload': '数据上传',
+  '/cost-estimate/project-info': '项目信息',
+  '/cost-estimate/ai-analysis': 'AI分析',
   '/cost-estimate/config': '参数配置',
   '/cost-estimate/result': '预估结果',
   '/cost-consumption': '成本消耗',
@@ -235,10 +237,10 @@ function Layout() {
           </div>
           <div>
             <Text strong style={{ fontSize: 18, color: '#0f172a', letterSpacing: '-0.02em' }}>
-              数字员工
+              IT项目智能
             </Text>
             <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: -2 }}>
-              成本智能管控平台
+              成本管控平台
             </Text>
           </div>
         </div>
