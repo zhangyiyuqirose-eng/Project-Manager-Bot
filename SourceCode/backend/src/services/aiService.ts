@@ -501,9 +501,38 @@ ${data.teamCosts.map(t => `- ${t.team}: 预期${t.expected}万, 实际${t.actual
   private async recognizeScreenshotsWithDeepSeek(
     screenshots: { type: string; base64: string }[]
   ): Promise<DeviationAnalysisResult> {
-    const systemPrompt = `从图片中提取项目信息，仅输出JSON格式。
-返回格式：{"project_name":"项目名称","contract_amount":合同金额数字,"labor_cost":人力成本数字,"devops_progress":进度数字}
-规则：金额单位万元，进度0-100，未找到返回null，仅输出JSON。`
+    const systemPrompt = `### 一、核心任务
+从图片中精准提取项目关键信息，仅输出**标准JSON格式**，禁止任何额外说明、解释、思考过程。
+
+### 二、必须提取的字段（严格对应key名）
+| key名               | 说明                                                                 |
+|---------------------|----------------------------------------------------------------------|
+| project_name        | 项目名称，提取图片中明确的项目全称，无则返回空字符串""                |
+| contract_amount     | 合同金额，提取数字部分（单位：万元），无则返回null                    |
+| labor_cost          | 当前人力成本，提取数字部分（单位：万元），无则返回null                 |
+| devops_progress     | DevOps进度，提取百分比数字（仅数值，不带%），无则返回null             |
+
+### 三、严格执行规则
+1.  **格式强制要求**：仅输出合法JSON，不得有任何多余字符，确保前端可直接解析。
+2.  **单位统一规则**：
+    - 金额统一提取**万元为单位的数字**（如图片写"100万"，提取为100；写"1,000,000元"，提取为100）
+    - 进度统一提取**纯数字**（如图片写"85%"，提取为85；写"进度85"，提取为85）
+3.  **缺省处理规则**：图片中未出现的字段，严格返回对应缺省值（空字符串/null），不得编造数据。
+4.  **多图处理规则**：若上传多张图片，合并提取所有有效信息，以最明确、最新的信息为准。
+5.  **修正提示规则**：若识别存在歧义，在JSON中不体现，仅保证数据准确性，由前端页面支持用户手动修正。
+6.  **OCR容错规则**：识别图片中的印刷体/手写体文字，优先提取表格、标题、标注中的关键数据，忽略无关干扰信息。
+
+### 四、输出示例（仅参考格式，禁止直接输出）
+{
+  "project_name": "XX银行核心系统升级项目",
+  "contract_amount": 500,
+  "labor_cost": 280,
+  "devops_progress": 75
+}
+
+### 五、禁止行为
+- 禁止输出任何非JSON内容，包括但不限于："以下是提取结果"、"注意事项"、"识别说明"
+- 禁止编造不存在的字段和数据`
 
     const results: DeviationAnalysisResult = {
       projectName: '',
