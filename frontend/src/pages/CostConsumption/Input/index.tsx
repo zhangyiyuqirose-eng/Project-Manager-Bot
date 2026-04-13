@@ -31,7 +31,7 @@ import {
   ArrowRightOutlined,
   InfoCircleOutlined,
   CheckCircleOutlined,
-  SearchOutlined,
+  // SearchOutlined, // 未使用
   SaveOutlined,
 } from '@ant-design/icons'
 import type { UploadProps, UploadFile } from 'antd'
@@ -90,7 +90,7 @@ export default function CostConsumptionInput() {
 
   // 项目编号查询相关状态
   const [projectCode, setProjectCode] = useState('')
-  const [querying, setQuerying] = useState(false)
+  const [_querying, setQuerying] = useState(false) // 用于后续查询状态显示
   const [actualProjectId, setActualProjectId] = useState<number | null>(null)
 
   // OCR识别结果表单
