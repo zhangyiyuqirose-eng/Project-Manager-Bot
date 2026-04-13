@@ -111,7 +111,8 @@ class AIService {
   }
 
   /**
-   * 调用AI模型（OpenAI 格式，支持流式模式）
+   * 调用AI模型（OpenAI 格式）
+   * MiniMax-M2.5 在流式模式下存在JSON格式问题，改用非流式模式确保稳定性
    */
   private async chat(messages: AIMessage[], systemPrompt?: string): Promise<string> {
     try {
@@ -122,14 +123,17 @@ class AIService {
       }
       fullMessages.push(...messages)
 
+      // 使用非流式模式（MiniMax-M2.5 流式模式JSON存在字符丢失问题）
       const requestBody = {
         model: this.model,
         temperature: 0.7,
-        stream: true, // 启用流式模式
+        stream: false, // 非流式模式，确保JSON完整
         messages: fullMessages
       }
 
-      const response = await axios.post(
+      console.log(`[AI Service] 调用AI模型: ${this.model}, 消息数: ${fullMessages.length}`)
+
+      const response = await axios.post<AIResponse>(
         this.apiUrl,
         requestBody,
         {
@@ -137,53 +141,18 @@ class AIService {
             'Authorization': `Bearer ${this.apiKey}`,
             'Content-Type': 'application/json; charset=utf-8'
           },
-          responseType: 'stream',
           timeout: 180000 // 3分钟超时
         }
       )
 
-      // 收集流式响应
-      return new Promise((resolve, reject) => {
-        let fullContent = ''
+      const content = response.data.choices?.[0]?.message?.content
+      console.log(`[AI Service] AI返回内容长度: ${content?.length || 0}`)
 
-        response.data.on('data', (chunk: Buffer) => {
-          const lines = chunk.toString().split('\n').filter(line => line.trim() !== '')
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              const data = line.slice(6)
-              if (data === '[DONE]') continue
-              try {
-                const parsed = JSON.parse(data)
-                const delta = parsed.choices?.[0]?.delta
-                // 同时处理 content 和 reasoning_content 字段
-                if (delta?.content) {
-                  fullContent += delta.content
-                }
-                // reasoning_content 是推理过程，也可以收集（可选）
-                // if (delta?.reasoning_content) {
-                //   fullContent += delta.reasoning_content
-                // }
-              } catch (e) {
-                // 忽略解析错误
-              }
-            }
-          }
-        })
+      if (!content) {
+        throw new Error('AI接口返回内容为空')
+      }
 
-        response.data.on('end', () => {
-          console.log(`[AI Service] 流式响应完成，内容长度: ${fullContent.length}`)
-          if (fullContent) {
-            resolve(fullContent)
-          } else {
-            reject(new Error('AI接口返回内容为空'))
-          }
-        })
-
-        response.data.on('error', (err: Error) => {
-          console.error('[AI Service] 流式响应错误:', err)
-          reject(new Error('AI服务流式调用失败: ' + err.message))
-        })
-      })
+      return content
     } catch (error: any) {
       console.error('[AI Service] 调用错误:', error?.response?.data || error?.message)
       throw new Error('AI服务调用失败: ' + (error?.response?.data?.error?.message || error?.message || '未知错误'))
@@ -373,18 +342,55 @@ ${documentText.substring(0, 12000)}`
     console.log(`[AI Service] AI 返回长度: ${text.length}`)
 
     // 解析 JSON
-    const jsonMatch = text.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) {
-      console.error('[AI Service] JSON 解析失败，AI返回内容:', text.substring(0, 500))
-      throw new Error('AI返回无法解析为JSON，请检查AI模型输出格式')
-    }
+      // 去除可能的markdown标记（如 ```json 和 ```）
+      let cleanedText = text
+      if (cleanedText.includes('```json')) {
+        cleanedText = cleanedText.replace(/```json\s*/gi, '').replace(/```\s*/g, '')
+      }
+
+      const jsonMatch = cleanedText.match(/\{[\s\S]*\}/)
+      if (!jsonMatch) {
+        console.error('[AI Service] JSON 解析失败，AI返回内容:', cleanedText.substring(0, 500))
+        throw new Error('AI返回无法解析为JSON，请检查AI模型输出格式')
+      }
 
     let result: DocumentParseResult
     try {
       result = JSON.parse(jsonMatch[0])
     } catch (e) {
-      console.error('[AI Service] JSON 解析失败:', jsonMatch[0].substring(0, 500))
-      throw new Error('AI返回JSON解析失败，请检查AI模型输出')
+      // 尝试修复常见的AI JSON格式错误
+      console.warn('[AI Service] JSON解析失败，尝试修复常见格式问题...')
+      let fixedJson = jsonMatch[0]
+
+      // 修复缺失的属性名（如 "complexity":"intermediate":1 应为 "complexity":"intermediate","association_systems":1）
+      fixedJson = fixedJson.replace(/"(very_basic|basic|medium|intermediate|advanced|complex|very_complex)":(\d+)/g, '"complexity":"$1","association_systems":$2')
+
+      // 修复合并的属性名（如 "complexity_systems":1 -> "complexity":"medium","association_systems":1）
+      fixedJson = fixedJson.replace(/"complexity_systems":(\d+)/g, '"complexity":"medium","association_systems":$1')
+
+      // 修复合并的属性名（如 "association_systemsname":"XXX" -> "association_systems":1},{"name":"XXX"）
+      fixedJson = fixedJson.replace(/"association_systemsname":"([^"]+)"/g, '"association_systems":1},{"name":"$1"')
+
+      // 修复缺失 association_systems 的结尾
+      fixedJson = fixedJson.replace(/"complexity":"(very_basic|basic|medium|complex|very_complex)"\s*,\s*}/g, '"complexity":"$1","association_systems":1}')
+
+      // 修复截断的属性名（如 {"分析" -> {"name":"偏差原因分析"）
+      fixedJson = fixedJson.replace(/\{"分析"/g, '{"name":"偏差原因分析"')
+
+      // 尝试修复缺失的括号
+      const openBrackets = (fixedJson.match(/\{/g) || []).length
+      const closeBrackets = (fixedJson.match(/\}/g) || []).length
+      if (openBrackets > closeBrackets) {
+        fixedJson += ']}'.repeat(openBrackets - closeBrackets)
+      }
+
+      try {
+        result = JSON.parse(fixedJson)
+        console.log('[AI Service] JSON修复成功')
+      } catch (e2) {
+        console.error('[AI Service] JSON修复失败:', fixedJson.substring(0, 500))
+        throw new Error('AI返回JSON格式错误，无法修复。请检查AI模型输出或调整prompt')
+      }
     }
 
     // 补充默认值
