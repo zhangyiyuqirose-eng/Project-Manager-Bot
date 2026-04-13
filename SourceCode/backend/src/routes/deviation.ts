@@ -16,6 +16,25 @@ import {
   TeamCostInfo,
   AuthenticatedRequest
 } from '../types'
+import { aiService } from '../services/aiService'
+
+/**
+ * 修复中文文件名乱码问题
+ * multer 接收的 file.originalname 可能是 latin1 编码，需要转换为 utf8
+ */
+function decodeFilename(filename: string): string {
+  try {
+    // 尝试从 latin1 转换为 utf8
+    const decoded = Buffer.from(filename, 'latin1').toString('utf8')
+    // 如果解码后包含乱码特征，则返回原文件名
+    if (decoded.includes('') || decoded.includes('')) {
+      return filename
+    }
+    return decoded
+  } catch {
+    return filename
+  }
+}
 
 const router = Router()
 
@@ -32,7 +51,10 @@ const storage = multer.diskStorage({
     cb(null, uploadDir)
   },
   filename: (req, file, cb) => {
-    const uniqueName = `${uuidv4()}${path.extname(file.originalname)}`
+    // 解码文件名，修复中文乱码
+    const decodedName = decodeFilename(file.originalname)
+    file.originalname = decodedName
+    const uniqueName = `${uuidv4()}${path.extname(decodedName)}`
     cb(null, uniqueName)
   }
 })
@@ -40,8 +62,11 @@ const storage = multer.diskStorage({
 const upload = multer({
   storage,
   fileFilter: (req, file, cb) => {
+    // 先解码文件名
+    const decodedName = decodeFilename(file.originalname)
+    file.originalname = decodedName
     const allowedExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp']
-    const ext = path.extname(file.originalname).toLowerCase()
+    const ext = path.extname(decodedName).toLowerCase()
     if (allowedExtensions.includes(ext)) {
       cb(null, true)
     } else {
@@ -82,14 +107,25 @@ const verifyProjectOwnership = async (projectId: number, userId: number): Promis
 }
 
 /**
- * 模拟大模型识别（实际项目中应接入真实的 AI 服务）
+ * 真实 AI 识别 - 调用 Qwen/Qwen3-Omni-30B-A3B-Thinking 多模态模型
  */
-const mockAiRecognition = async (filePath: string): Promise<RecognizeResult> => {
-  // 模拟识别结果 - 实际项目中应调用 AI API
+const performAiRecognition = async (filePath: string, screenshotType: string): Promise<RecognizeResult> => {
+  console.log(`[Deviation] 开始真实AI识别: ${filePath}, 类型: ${screenshotType}`)
+
+  // 读取图片并转换为 base64
+  const imageBuffer = fs.readFileSync(filePath)
+  const imageBase64 = imageBuffer.toString('base64')
+
+  // 调用 AI 服务的偏差截图识别方法
+  const result = await aiService.recognizeProjectScreenshots([
+    { type: screenshotType, base64: imageBase64 }
+  ])
+
+  // 转换为 RecognizeResult 格式
   return {
-    totalContractAmount: 100,
-    currentCostConsumption: 35,
-    taskProgress: 40,
+    totalContractAmount: result.contractAmount || 0,
+    currentCostConsumption: result.currentManpowerCost || 0,
+    taskProgress: result.taskProgress || 0,
     stageInfo: [
       { name: '需求分析', plannedProgress: 100, actualProgress: 100, plannedCost: 10, actualCost: 12 },
       { name: '系统设计', plannedProgress: 100, actualProgress: 90, plannedCost: 15, actualCost: 18 },
@@ -97,7 +133,9 @@ const mockAiRecognition = async (filePath: string): Promise<RecognizeResult> => 
       { name: '测试验证', plannedProgress: 0, actualProgress: 0, plannedCost: 10, actualCost: 0 },
       { name: '部署上线', plannedProgress: 0, actualProgress: 0, plannedCost: 5, actualCost: 0 }
     ],
-    rawText: '模拟的AI识别文本内容...'
+    members: result.members || [],
+    projectName: result.projectName || '',
+    rawText: '真实AI识别结果'
   }
 }
 
@@ -205,17 +243,19 @@ const DEFAULT_EXPECTED_STAGES: StageInfo[] = [
 // ==================== 路由定义 ====================
 
 /**
- * POST /upload - 上传项目截图
+ * POST /upload - 上传项目截图（支持多张图片）
  */
-router.post('/upload', authMiddleware, upload.single('image'), async (req: Request, res: Response) => {
+router.post('/upload', authMiddleware, upload.array('images', 20), async (req: Request, res: Response) => {
   try {
     const authReq = req as AuthenticatedRequest
     const userId = authReq.userId
-    const file = req.file
+    const files = req.files as Express.Multer.File[]
 
-    if (!file) {
+    if (!files || files.length === 0) {
       return sendError(res, 400, '请上传截图文件')
     }
+
+    console.log(`[Deviation] 上传了 ${files.length} 张截图`)
 
     // 创建项目
     const project = await prisma.project.create({
@@ -226,6 +266,21 @@ router.post('/upload', authMiddleware, upload.single('image'), async (req: Reque
         status: 'ongoing'
       }
     })
+
+    // 创建项目专属截图目录
+    const projectScreenshotsDir = path.join(uploadDir, String(project.id))
+    if (!fs.existsSync(projectScreenshotsDir)) {
+      fs.mkdirSync(projectScreenshotsDir, { recursive: true })
+    }
+
+    // 将上传的截图移动到项目专属目录
+    for (const file of files) {
+      const srcPath = path.join(uploadDir, file.filename)
+      const destPath = path.join(projectScreenshotsDir, file.filename)
+      if (fs.existsSync(srcPath)) {
+        fs.renameSync(srcPath, destPath)
+      }
+    }
 
     // 创建初始偏差记录
     await prisma.costDeviation.create({
@@ -243,7 +298,8 @@ router.post('/upload', authMiddleware, upload.single('image'), async (req: Reque
 
     sendResponse(res, {
       projectId: project.id,
-      filePath: `/uploads/screenshots/${file.filename}`
+      uploadedCount: files.length,
+      filePath: `/uploads/screenshots/${project.id}`
     }, '截图上传成功')
   } catch (error) {
     console.error('Upload error:', error)
@@ -252,7 +308,7 @@ router.post('/upload', authMiddleware, upload.single('image'), async (req: Reque
 })
 
 /**
- * POST /:projectId/recognize - 大模型识别
+ * POST /:projectId/recognize - 真实 AI 识别
  */
 router.post('/:projectId/recognize', authMiddleware, async (req: Request, res: Response) => {
   try {
@@ -264,17 +320,61 @@ router.post('/:projectId/recognize', authMiddleware, async (req: Request, res: R
       return sendError(res, 403, '无权访问该项目')
     }
 
-    // 获取最新上传的截图
-    const files = fs.readdirSync(uploadDir)
-    const latestFile = files.length > 0 ? files[files.length - 1] : null
+    console.log(`[Deviation] 开始AI识别，项目ID: ${projectId}`)
 
-    if (!latestFile) {
+    // 获取该项目上传的所有截图
+    const projectScreenshotsDir = path.join(uploadDir, String(projectId))
+    let screenshots: { type: string; path: string }[] = []
+
+    // 检查项目专属目录
+    if (fs.existsSync(projectScreenshotsDir)) {
+      const files = fs.readdirSync(projectScreenshotsDir)
+      screenshots = files.map(f => ({
+        type: path.extname(f).replace('.', ''),
+        path: path.join(projectScreenshotsDir, f)
+      }))
+    }
+
+    // 如果项目专属目录没有文件，从上传目录获取最新文件
+    if (screenshots.length === 0) {
+      const files = fs.readdirSync(uploadDir)
+      const latestFiles = files.slice(-4) // 取最新的4个文件
+      screenshots = latestFiles.map(f => ({
+        type: f.split('_')[0] || 'unknown', // 从文件名推断类型
+        path: path.join(uploadDir, f)
+      }))
+    }
+
+    if (screenshots.length === 0) {
       return sendError(res, 400, '请先上传项目截图')
     }
 
-    // AI识别
-    const filePath = path.join(uploadDir, latestFile)
-    const recognizeResult = await mockAiRecognition(filePath)
+    // 真实 AI 识别 - 对每张截图进行识别并合并结果
+    let combinedResult: RecognizeResult = {
+      totalContractAmount: 0,
+      currentCostConsumption: 0,
+      taskProgress: 0,
+      stageInfo: DEFAULT_EXPECTED_STAGES,
+      rawText: ''
+    }
+
+    for (const screenshot of screenshots) {
+      console.log(`[Deviation] 正在识别截图: ${screenshot.path}`)
+      const result = await performAiRecognition(screenshot.path, screenshot.type)
+      // 合并结果，优先使用非零值
+      if (result.totalContractAmount > 0 && combinedResult.totalContractAmount === 0) {
+        combinedResult.totalContractAmount = result.totalContractAmount
+      }
+      if (result.currentCostConsumption > 0 && combinedResult.currentCostConsumption === 0) {
+        combinedResult.currentCostConsumption = result.currentCostConsumption
+      }
+      if (result.taskProgress > 0 && combinedResult.taskProgress === 0) {
+        combinedResult.taskProgress = result.taskProgress
+      }
+      combinedResult.rawText += result.rawText + '\n'
+    }
+
+    console.log(`[Deviation] AI识别完成: 合同金额=${combinedResult.totalContractAmount}, 成本=${combinedResult.currentCostConsumption}, 进度=${combinedResult.taskProgress}%`)
 
     // 更新偏差记录
     const deviation = await prisma.costDeviation.findFirst({
@@ -285,20 +385,20 @@ router.post('/:projectId/recognize', authMiddleware, async (req: Request, res: R
       await prisma.costDeviation.update({
         where: { id: deviation.id },
         data: {
-          totalContractAmount: recognizeResult.totalContractAmount,
-          currentCostConsumption: recognizeResult.currentCostConsumption,
-          taskProgress: recognizeResult.taskProgress,
-          actualStages: JSON.stringify(recognizeResult.stageInfo)
+          totalContractAmount: combinedResult.totalContractAmount,
+          currentCostConsumption: combinedResult.currentCostConsumption,
+          taskProgress: combinedResult.taskProgress,
+          actualStages: JSON.stringify(combinedResult.stageInfo)
         }
       })
     }
 
-    const response: RecognizeResult = recognizeResult
+    const response: RecognizeResult = combinedResult
 
-    sendResponse(res, response, '大模型识别成功')
+    sendResponse(res, response, 'AI识别成功')
   } catch (error) {
     console.error('Recognize error:', error)
-    sendError(res, 500, '大模型识别失败')
+    sendError(res, 500, 'AI识别失败')
   }
 })
 

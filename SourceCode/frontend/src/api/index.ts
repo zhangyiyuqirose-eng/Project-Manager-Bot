@@ -35,6 +35,11 @@ aiApi.interceptors.request.use(
 
 aiApi.interceptors.response.use(
   (response) => {
+    // 如果是 blob 类型响应（如文件下载），直接返回
+    if (response.config.responseType === 'blob') {
+      return response
+    }
+
     const { data } = response
     if (data.code !== 0 && data.code !== 200) {
       message.error(data.message || '请求失败')
@@ -45,21 +50,34 @@ aiApi.interceptors.response.use(
   (error: AxiosError) => {
     if (error.response) {
       const { status, data } = error.response
-      switch (status) {
-        case 401:
-          message.error('接口未授权，请检查权限')
-          break
-        case 403:
-          message.error('权限不足，无法访问')
-          break
-        case 404:
-          message.error('请求的资源不存在')
-          break
-        case 500:
-          message.error('服务器错误，请稍后重试')
-          break
-        default:
-          message.error((data as any)?.message || '请求失败')
+
+      // 如果是 blob 响应错误，尝试解析错误信息
+      if (data instanceof Blob) {
+        data.text().then(text => {
+          try {
+            const errorData = JSON.parse(text)
+            message.error(errorData.message || '请求失败')
+          } catch {
+            message.error('请求失败')
+          }
+        })
+      } else {
+        switch (status) {
+          case 401:
+            message.error('接口未授权，请检查权限')
+            break
+          case 403:
+            message.error('权限不足，无法访问')
+            break
+          case 404:
+            message.error('请求的资源不存在')
+            break
+          case 500:
+            message.error('服务器错误，请稍后重试')
+            break
+          default:
+            message.error((data as any)?.message || '请求失败')
+        }
       }
     } else if (error.request) {
       message.error('网络错误，请检查网络连接')
@@ -220,8 +238,15 @@ export const estimateApi = {
   getParseResult: (projectId: number) =>
     api.get<ApiResponse<any>>(`/estimate/${projectId}/parse-result`),
 
+  // 更新解析结果（功能点编辑、项目信息）
+  updateParseResult: (projectId: number, data: { modules?: any[]; projectName?: string; systemName?: string }) =>
+    api.put<ApiResponse<any>>(`/estimate/${projectId}/parse-result`, data),
+
   getDefaultConfig: () =>
     api.get<ApiResponse<any>>('/estimate/config/default'),
+
+  getConfig: (projectId: number) =>
+    api.get<ApiResponse<any>>(`/estimate/${projectId}/config`),
 
   saveConfig: (projectId: number, config: any) =>
     api.post<ApiResponse<any>>(`/estimate/${projectId}/config`, config),
@@ -233,8 +258,9 @@ export const estimateApi = {
   getResult: (projectId: number) =>
     api.get<ApiResponse<any>>(`/estimate/${projectId}/result`),
 
+  // 导出Excel，使用更长的timeout（AI生成描述需要时间）
   exportExcel: (projectId: number) =>
-    api.get(`/estimate/${projectId}/export`, { responseType: 'blob' }),
+    aiApi.get(`/estimate/${projectId}/export`, { responseType: 'blob' }),
 }
 
 // 成本消耗预估相关API
@@ -247,8 +273,16 @@ export const consumptionApi = {
     })
   },
 
+  // 新增：根据项目编号查询项目信息
+  queryByProjectCode: (projectCode: string) =>
+    api.get<ApiResponse<any>>(`/consumption/project/${projectCode}`),
+
   saveProjectInfo: (projectId: number, data: any) =>
     api.post<ApiResponse<any>>(`/consumption/${projectId}/info`, data),
+
+  // 新增：保存项目人员信息
+  saveMembers: (projectId: number, members: any[]) =>
+    api.post<ApiResponse<any>>(`/consumption/${projectId}/save-members`, { members }),
 
   calculateCost: (projectId: number) =>
     api.post<ApiResponse<any>>(`/consumption/${projectId}/calculate`),
@@ -262,10 +296,10 @@ export const consumptionApi = {
 
 // 成本偏差监控相关API
 export const deviationApi = {
-  uploadImages: (files: File[], type: string) => {
+  // 修改：合并上传，支持多张图片
+  uploadImages: (files: File[]) => {
     const formData = new FormData()
-    files.forEach((file) => formData.append('files', file))
-    formData.append('type', type)
+    files.forEach((file) => formData.append('images', file))
     return api.post<ApiResponse<any>>('/deviation/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     })

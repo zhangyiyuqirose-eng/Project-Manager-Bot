@@ -84,7 +84,7 @@ export default function Login() {
       >
         <div style={{ textAlign: 'center', marginBottom: 40 }}>
           <Title level={3} style={{ margin: 0, fontWeight: 700 }}>
-            数字员工成本管理系统
+            IT项目智能成本管控平台
           </Title>
           <Text type="secondary" style={{ fontSize: 14, marginTop: 8, display: 'block' }}>
             请登录您的账号

@@ -2,10 +2,8 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Card,
-  Steps,
   Form,
   InputNumber,
-  Input,
   Button,
   Typography,
   message,
@@ -13,23 +11,16 @@ import {
   Row,
   Col,
   Table,
-  Tag,
   Tooltip,
   Empty,
   Modal,
+  Input,
 } from 'antd'
 import {
-  FileTextOutlined,
   SettingOutlined,
-  FileSearchOutlined,
-  BarChartOutlined,
   SaveOutlined,
-  CalculatorOutlined,
-  InfoCircleOutlined,
   ArrowLeftOutlined,
   ArrowRightOutlined,
-  ThunderboltOutlined,
-  RocketOutlined,
   PlusOutlined,
   DeleteOutlined,
 } from '@ant-design/icons'
@@ -43,140 +34,26 @@ import type {
   TechStackCoefficient,
   UnitPrice,
 } from '@/types'
+import PageTitle from '@/components/common/PageTitle'
+import EstimateSteps from '@/components/common/EstimateSteps'
 
-const { Title, Text } = Typography
-
-// 步骤条配置（4步）
-const stepItems = [
-  {
-    title: '文件上传',
-    description: '上传需求文档',
-    icon: <FileTextOutlined />,
-  },
-  {
-    title: '参数配置',
-    description: '配置计算参数',
-    icon: <SettingOutlined />,
-  },
-  {
-    title: '文档解析结果',
-    description: '查看功能点详情',
-    icon: <FileSearchOutlined />,
-  },
-  {
-    title: '结果展示',
-    description: '查看成本预估',
-    icon: <BarChartOutlined />,
-  },
-]
-
-// 默认复杂度基准配置
-const defaultComplexityConfig: ComplexityLevel[] = [
-  { level: '简单', workdays: 1 },
-  { level: '一般', workdays: 3 },
-  { level: '中等', workdays: 5 },
-  { level: '复杂', workdays: 8 },
-  { level: '极复杂', workdays: 15 },
-]
-
-// 默认系统关联度系数配置
-const defaultSystemCoefficientConfig: SystemCoefficient[] = [
-  { systemCount: 1, coefficient: 1.0 },
-  { systemCount: 2, coefficient: 1.2 },
-  { systemCount: 3, coefficient: 1.4 },
-  { systemCount: 4, coefficient: 1.6 },
-  { systemCount: 5, coefficient: 1.8 },
-]
-
-// 默认流程系数配置
-const defaultProcessCoefficientConfig: ProcessCoefficient[] = [
-  { stage: '需求分析', coefficient: 0.15 },
-  { stage: '系统设计', coefficient: 0.20 },
-  { stage: '开发实现', coefficient: 0.35 },
-  { stage: '测试验证', coefficient: 0.15 },
-  { stage: '部署上线', coefficient: 0.10 },
-  { stage: '运维保障', coefficient: 0.05 },
-]
-
-// 默认技术栈难度系数配置
-const defaultTechStackCoefficientConfig: TechStackCoefficient[] = [
-  { techType: '常规技术', coefficient: 1.0 },
-  { techType: '新技术应用', coefficient: 1.2 },
-  { techType: '技术改造', coefficient: 1.3 },
-  { techType: '技术集成', coefficient: 1.4 },
-  { techType: '前沿技术', coefficient: 1.5 },
-]
-
-// 默认人天单价配置
-const defaultUnitPriceConfig: UnitPrice[] = [
-  { role: '项目经理', price: 2500 },
-  { role: '高级开发', price: 1800 },
-  { role: '中级开发', price: 1500 },
-  { role: '初级开发', price: 1200 },
-  { role: '测试工程师', price: 1000 },
-  { role: '运维工程师', price: 1000 },
-]
-
-// 配置卡片标题组件
-interface ConfigCardHeaderProps {
-  title: string
-  subtitle: string
-  icon: React.ReactNode
-  color: string
-  onAdd?: () => void
-}
-
-function ConfigCardHeader({ title, subtitle, icon, color, onAdd }: ConfigCardHeaderProps) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
-        <div
-          style={{
-            width: 52,
-            height: 52,
-            borderRadius: 14,
-            background: `${color}12`,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <span style={{ fontSize: 26, color }}>{icon}</span>
-        </div>
-        <div>
-          <Title level={5} style={{ margin: 0, fontWeight: 600 }}>{title}</Title>
-          <Text type="secondary" style={{ fontSize: 13, marginTop: 4 }}>{subtitle}</Text>
-        </div>
-      </div>
-      {onAdd && (
-        <Button
-          type="dashed"
-          icon={<PlusOutlined />}
-          onClick={onAdd}
-          style={{ borderRadius: 10 }}
-        >
-          新增
-        </Button>
-      )}
-    </div>
-  )
-}
+const { Text } = Typography
 
 export default function CostEstimateConfig() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const projectId = searchParams.get('projectId')
 
-  const [currentStep, setCurrentStep] = useState(1)
+  const [currentStep] = useState(3)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
 
   // 配置数据
-  const [complexityConfig, setComplexityConfig] = useState<ComplexityLevel[]>(defaultComplexityConfig)
-  const [systemCoefficientConfig, setSystemCoefficientConfig] = useState<SystemCoefficient[]>(defaultSystemCoefficientConfig)
-  const [processCoefficientConfig, setProcessCoefficientConfig] = useState<ProcessCoefficient[]>(defaultProcessCoefficientConfig)
-  const [techStackCoefficientConfig, setTechStackCoefficientConfig] = useState<TechStackCoefficient[]>(defaultTechStackCoefficientConfig)
-  const [unitPriceConfig, setUnitPriceConfig] = useState<UnitPrice[]>(defaultUnitPriceConfig)
+  const [complexityConfig, setComplexityConfig] = useState<ComplexityLevel[]>([])
+  const [systemCoefficientConfig, setSystemCoefficientConfig] = useState<SystemCoefficient[]>([])
+  const [processCoefficientConfig, setProcessCoefficientConfig] = useState<ProcessCoefficient[]>([])
+  const [techStackCoefficientConfig, setTechStackCoefficientConfig] = useState<TechStackCoefficient[]>([])
+  const [unitPriceConfig, setUnitPriceConfig] = useState<UnitPrice[]>([])
   const [managementCoefficient, setManagementCoefficient] = useState<number>(0.15)
 
   // 弹窗状态
@@ -184,43 +61,70 @@ export default function CostEstimateConfig() {
   const [modalType, setModalType] = useState<'complexity' | 'system' | 'process' | 'techStack' | 'unitPrice'>('complexity')
   const [form] = Form.useForm()
 
-  // 加载默认参数
+  // 加载配置参数
   useEffect(() => {
-    const loadDefaultConfig = async () => {
-      setLoading(true)
+    if (projectId) {
+      loadConfig()
+    }
+  }, [projectId])
+
+  const loadConfig = async () => {
+    setLoading(true)
+    try {
+      const defaultResponse = await estimateApi.getDefaultConfig()
+      if (defaultResponse.data.code === 0 || defaultResponse.data.code === 200) {
+        const defaultConfig: EstimateConfig = defaultResponse.data.data
+        if (defaultConfig) {
+          setComplexityConfig(Array.isArray(defaultConfig.complexityConfig) ? defaultConfig.complexityConfig : [])
+          setSystemCoefficientConfig(Array.isArray(defaultConfig.systemCoefficientConfig) ? defaultConfig.systemCoefficientConfig : [])
+          setProcessCoefficientConfig(Array.isArray(defaultConfig.processCoefficientConfig) ? defaultConfig.processCoefficientConfig : [])
+          setTechStackCoefficientConfig(Array.isArray(defaultConfig.techStackCoefficientConfig) ? defaultConfig.techStackCoefficientConfig : [])
+          setUnitPriceConfig(Array.isArray(defaultConfig.unitPriceConfig) ? defaultConfig.unitPriceConfig : [])
+          setManagementCoefficient(defaultConfig.managementCoefficient || 0.15)
+        }
+      }
+
       try {
-        const response = await estimateApi.getDefaultConfig()
+        const response = await estimateApi.getConfig(Number(projectId))
         if (response.data.code === 0 || response.data.code === 200) {
-          const config: EstimateConfig = response.data.data
-          if (config) {
-            // 确保数据是数组格式，否则使用默认配置
-            setComplexityConfig(Array.isArray(config.complexityConfig) ? config.complexityConfig : defaultComplexityConfig)
-            setSystemCoefficientConfig(Array.isArray(config.systemCoefficientConfig) ? config.systemCoefficientConfig : defaultSystemCoefficientConfig)
-            setProcessCoefficientConfig(Array.isArray(config.processCoefficientConfig) ? config.processCoefficientConfig : defaultProcessCoefficientConfig)
-            setTechStackCoefficientConfig(Array.isArray(config.techStackCoefficientConfig) ? config.techStackCoefficientConfig : defaultTechStackCoefficientConfig)
-            setUnitPriceConfig(Array.isArray(config.unitPriceConfig) ? config.unitPriceConfig : defaultUnitPriceConfig)
-            setManagementCoefficient(config.managementCoefficient || 0.15)
+          const savedConfig: EstimateConfig = response.data.data
+          if (savedConfig) {
+            if (Array.isArray(savedConfig.complexityConfig) && savedConfig.complexityConfig.length > 0) {
+              setComplexityConfig(savedConfig.complexityConfig)
+            }
+            if (Array.isArray(savedConfig.systemCoefficientConfig) && savedConfig.systemCoefficientConfig.length > 0) {
+              setSystemCoefficientConfig(savedConfig.systemCoefficientConfig)
+            }
+            if (Array.isArray(savedConfig.processCoefficientConfig) && savedConfig.processCoefficientConfig.length > 0) {
+              setProcessCoefficientConfig(savedConfig.processCoefficientConfig)
+            }
+            if (Array.isArray(savedConfig.techStackCoefficientConfig) && savedConfig.techStackCoefficientConfig.length > 0) {
+              setTechStackCoefficientConfig(savedConfig.techStackCoefficientConfig)
+            }
+            if (Array.isArray(savedConfig.unitPriceConfig) && savedConfig.unitPriceConfig.length > 0) {
+              setUnitPriceConfig(savedConfig.unitPriceConfig)
+            }
+            if (savedConfig.managementCoefficient) {
+              setManagementCoefficient(savedConfig.managementCoefficient)
+            }
           }
         }
       } catch {
         // 使用默认配置
-        message.info('使用默认配置参数')
-      } finally {
-        setLoading(false)
       }
+    } catch {
+      message.error('加载默认配置失败')
+    } finally {
+      setLoading(false)
     }
+  }
 
-    loadDefaultConfig()
-  }, [])
-
-  // 打开新增弹窗
   const openAddModal = (type: 'complexity' | 'system' | 'process' | 'techStack' | 'unitPrice') => {
     setModalType(type)
     form.resetFields()
     setModalVisible(true)
   }
 
-  // 处理新增
   const handleAdd = async () => {
     try {
       const values = await form.validateFields()
@@ -263,14 +167,13 @@ export default function CostEstimateConfig() {
           break
       }
 
-      message.success('添加成功')
       setModalVisible(false)
+      message.success('添加成功')
     } catch {
-      // 表单验证失败
+      // 验证失败
     }
   }
 
-  // 处理删除
   const handleDelete = (type: string, key: string | number) => {
     switch (type) {
       case 'complexity':
@@ -292,39 +195,9 @@ export default function CostEstimateConfig() {
     message.success('删除成功')
   }
 
-  // 保存参数模板
   const handleSaveConfig = async () => {
     if (!projectId) {
-      message.warning('缺少项目ID，无法保存配置')
-      return
-    }
-
-    setSaving(true)
-    try {
-      const config: EstimateConfig = {
-        complexityConfig,
-        systemCoefficientConfig,
-        processCoefficientConfig,
-        techStackCoefficientConfig,
-        unitPriceConfig,
-        managementCoefficient,
-      }
-
-      const response = await estimateApi.saveConfig(Number(projectId), config)
-      if (response.data.code === 0 || response.data.code === 200) {
-        message.success('配置保存成功')
-      }
-    } catch {
-      message.error('配置保存失败')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  // 保存配置并跳转到解析结果页
-  const handleNext = async () => {
-    if (!projectId) {
-      message.warning('缺少项目ID，无法保存配置')
+      message.warning('缺少项目ID')
       return
     }
 
@@ -341,8 +214,6 @@ export default function CostEstimateConfig() {
 
       await estimateApi.saveConfig(Number(projectId), config)
       message.success('配置保存成功')
-      setCurrentStep(2)
-      navigate(`/cost-estimate/parse-result?projectId=${projectId}`)
     } catch {
       message.error('配置保存失败')
     } finally {
@@ -350,347 +221,180 @@ export default function CostEstimateConfig() {
     }
   }
 
-  // 复杂度基准表格列配置
-  const complexityColumns: ColumnsType<ComplexityLevel> = [
-    {
-      title: '复杂度等级',
-      dataIndex: 'level',
-      key: 'level',
-      width: 120,
-      render: (value: string) => {
-        const colors: Record<string, string> = {
-          '简单': '#10B981',
-          '一般': '#3B82F6',
-          '中等': '#F59E0B',
-          '复杂': '#EF4444',
-          '极复杂': '#8B5CF6',
-        }
-        return (
-          <Tag
-            style={{
-              borderRadius: 8,
-              padding: '4px 12px',
-              background: `${colors[value] || '#64748b'}15`,
-              color: colors[value] || '#64748b',
-              border: 'none',
-              fontWeight: 500,
-            }}
-          >
-            {value}
-          </Tag>
-        )
-      },
-    },
-    {
-      title: '基准人天',
-      dataIndex: 'workdays',
-      key: 'workdays',
-      width: 120,
-      render: (value: number, _: ComplexityLevel, index: number) => (
-        <InputNumber
-          min={1}
-          max={30}
-          value={value}
-          onChange={(val) => {
-            const newConfig = [...complexityConfig]
-            newConfig[index].workdays = val || 1
-            setComplexityConfig(newConfig)
-          }}
-          style={{ width: '100%', borderRadius: 8 }}
-        />
-      ),
-    },
-    {
-      title: '操作',
-      key: 'action',
-      width: 60,
-      render: (_, record) => (
-        <Button
-          type="text"
-          danger
-          icon={<DeleteOutlined />}
-          onClick={() => handleDelete('complexity', record.level)}
-        />
-      ),
-    },
-  ]
+  const handleNext = async () => {
+    if (!projectId) {
+      message.warning('缺少项目ID')
+      return
+    }
 
-  // 系统关联度系数表格列配置
-  const systemCoefficientColumns: ColumnsType<SystemCoefficient> = [
-    {
-      title: '关联系统数',
-      dataIndex: 'systemCount',
-      key: 'systemCount',
-      width: 120,
-      render: (value: number) => (
-        <Text strong style={{ color: '#3B82F6' }}>{value} 个</Text>
-      ),
-    },
-    {
-      title: '系数',
-      dataIndex: 'coefficient',
-      key: 'coefficient',
-      width: 120,
-      render: (value: number, _: SystemCoefficient, index: number) => (
-        <InputNumber
-          min={1}
-          max={3}
-          step={0.1}
-          precision={2}
-          value={value}
-          onChange={(val) => {
-            const newConfig = [...systemCoefficientConfig]
-            newConfig[index].coefficient = val || 1
-            setSystemCoefficientConfig(newConfig)
-          }}
-          style={{ width: '100%', borderRadius: 8 }}
-        />
-      ),
-    },
-    {
-      title: '操作',
-      key: 'action',
-      width: 60,
-      render: (_, record) => (
-        <Button
-          type="text"
-          danger
-          icon={<DeleteOutlined />}
-          onClick={() => handleDelete('system', record.systemCount)}
-        />
-      ),
-    },
-  ]
+    setSaving(true)
+    try {
+      const config: EstimateConfig = {
+        complexityConfig,
+        systemCoefficientConfig,
+        processCoefficientConfig,
+        techStackCoefficientConfig,
+        unitPriceConfig,
+        managementCoefficient,
+      }
 
-  // 流程系数表格列配置
-  const processCoefficientColumns: ColumnsType<ProcessCoefficient> = [
-    {
-      title: '阶段',
-      dataIndex: 'stage',
-      key: 'stage',
-      width: 120,
-      render: (value: string) => {
-        const icons: Record<string, React.ReactNode> = {
-          '需求分析': '📋',
-          '系统设计': '🎨',
-          '开发实现': '💻',
-          '测试验证': '🧪',
-          '部署上线': '🚀',
-          '运维保障': '🔧',
-        }
-        return (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span>{icons[value] || '📌'}</span>
-            <Text>{value}</Text>
-          </div>
-        )
-      },
-    },
-    {
-      title: '系数',
-      dataIndex: 'coefficient',
-      key: 'coefficient',
-      width: 120,
-      render: (value: number, _: ProcessCoefficient, index: number) => (
-        <InputNumber
-          min={0.01}
-          max={1}
-          step={0.05}
-          precision={2}
-          value={value}
-          onChange={(val) => {
-            const newConfig = [...processCoefficientConfig]
-            newConfig[index].coefficient = val || 0.1
-            setProcessCoefficientConfig(newConfig)
-          }}
-          style={{ width: '100%', borderRadius: 8 }}
-        />
-      ),
-    },
-    {
-      title: '操作',
-      key: 'action',
-      width: 60,
-      render: (_, record) => (
-        <Button
-          type="text"
-          danger
-          icon={<DeleteOutlined />}
-          onClick={() => handleDelete('process', record.stage)}
-        />
-      ),
-    },
-  ]
-
-  // 技术栈难度系数表格列配置
-  const techStackCoefficientColumns: ColumnsType<TechStackCoefficient> = [
-    {
-      title: '技术类型',
-      dataIndex: 'techType',
-      key: 'techType',
-      width: 120,
-      render: (value: string) => {
-        const colors: Record<string, string> = {
-          '常规技术': '#64748b',
-          '新技术应用': '#3B82F6',
-          '技术改造': '#F59E0B',
-          '技术集成': '#8B5CF6',
-          '前沿技术': '#EF4444',
-        }
-        return (
-          <Tag
-            style={{
-              borderRadius: 8,
-              padding: '4px 12px',
-              background: `${colors[value] || '#64748b'}15`,
-              color: colors[value] || '#64748b',
-              border: 'none',
-            }}
-          >
-            {value}
-          </Tag>
-        )
-      },
-    },
-    {
-      title: '系数',
-      dataIndex: 'coefficient',
-      key: 'coefficient',
-      width: 120,
-      render: (value: number, _: TechStackCoefficient, index: number) => (
-        <InputNumber
-          min={1}
-          max={2}
-          step={0.1}
-          precision={2}
-          value={value}
-          onChange={(val) => {
-            const newConfig = [...techStackCoefficientConfig]
-            newConfig[index].coefficient = val || 1
-            setTechStackCoefficientConfig(newConfig)
-          }}
-          style={{ width: '100%', borderRadius: 8 }}
-        />
-      ),
-    },
-    {
-      title: '操作',
-      key: 'action',
-      width: 60,
-      render: (_, record) => (
-        <Button
-          type="text"
-          danger
-          icon={<DeleteOutlined />}
-          onClick={() => handleDelete('techStack', record.techType)}
-        />
-      ),
-    },
-  ]
-
-  // 人天单价表格列配置
-  const unitPriceColumns: ColumnsType<UnitPrice> = [
-    {
-      title: '角色',
-      dataIndex: 'role',
-      key: 'role',
-      width: 120,
-      render: (value: string) => (
-        <Text style={{ fontWeight: 500, color: '#0f172a' }}>{value}</Text>
-      ),
-    },
-    {
-      title: '单价(元/天)',
-      dataIndex: 'price',
-      key: 'price',
-      width: 120,
-      render: (value: number, _: UnitPrice, index: number) => (
-        <InputNumber
-          min={500}
-          max={5000}
-          step={100}
-          value={value}
-          onChange={(val) => {
-            const newConfig = [...unitPriceConfig]
-            newConfig[index].price = val || 1000
-            setUnitPriceConfig(newConfig)
-          }}
-          style={{ width: '100%', borderRadius: 8 }}
-          formatter={(val) => `¥${val}`}
-          parser={(val) => Number(val?.replace('¥', '') || 0)}
-        />
-      ),
-    },
-    {
-      title: '操作',
-      key: 'action',
-      width: 60,
-      render: (_, record) => (
-        <Button
-          type="text"
-          danger
-          icon={<DeleteOutlined />}
-          onClick={() => handleDelete('unitPrice', record.role)}
-        />
-      ),
-    },
-  ]
-
-  // 弹窗表单配置
-  const modalFormItems = {
-    complexity: (
-      <>
-        <Form.Item name="level" label="复杂度等级" rules={[{ required: true, message: '请输入复杂度等级' }]}>
-          <Input placeholder="如：特高级" />
-        </Form.Item>
-        <Form.Item name="workdays" label="基准人天" rules={[{ required: true, message: '请输入基准人天' }]}>
-          <InputNumber min={1} max={30} style={{ width: '100%' }} placeholder="如：20" />
-        </Form.Item>
-      </>
-    ),
-    system: (
-      <>
-        <Form.Item name="systemCount" label="关联系统数" rules={[{ required: true, message: '请输入关联系统数' }]}>
-          <InputNumber min={1} max={20} style={{ width: '100%' }} placeholder="如：6" />
-        </Form.Item>
-        <Form.Item name="coefficient" label="系数" rules={[{ required: true, message: '请输入系数' }]}>
-          <InputNumber min={1} max={3} step={0.1} precision={2} style={{ width: '100%' }} placeholder="如：2.0" />
-        </Form.Item>
-      </>
-    ),
-    process: (
-      <>
-        <Form.Item name="stage" label="阶段名称" rules={[{ required: true, message: '请输入阶段名称' }]}>
-          <Input placeholder="如：数据迁移" />
-        </Form.Item>
-        <Form.Item name="coefficient" label="系数" rules={[{ required: true, message: '请输入系数' }]}>
-          <InputNumber min={0.01} max={1} step={0.01} precision={2} style={{ width: '100%' }} placeholder="如：0.05" />
-        </Form.Item>
-      </>
-    ),
-    techStack: (
-      <>
-        <Form.Item name="techType" label="技术类型" rules={[{ required: true, message: '请输入技术类型' }]}>
-          <Input placeholder="如：AI大模型" />
-        </Form.Item>
-        <Form.Item name="coefficient" label="系数" rules={[{ required: true, message: '请输入系数' }]}>
-          <InputNumber min={1} max={2} step={0.1} precision={2} style={{ width: '100%' }} placeholder="如：1.6" />
-        </Form.Item>
-      </>
-    ),
-    unitPrice: (
-      <>
-        <Form.Item name="role" label="角色名称" rules={[{ required: true, message: '请输入角色名称' }]}>
-          <Input placeholder="如：AI训练师" />
-        </Form.Item>
-        <Form.Item name="price" label="单价(元/天)" rules={[{ required: true, message: '请输入单价' }]}>
-          <InputNumber min={500} max={5000} step={100} style={{ width: '100%' }} placeholder="如：2500" />
-        </Form.Item>
-      </>
-    ),
+      await estimateApi.saveConfig(Number(projectId), config)
+      const calcResponse = await estimateApi.calculate(Number(projectId))
+      if (calcResponse.data.code === 0 || calcResponse.data.code === 200) {
+        message.success('计算完成')
+        navigate(`/cost-estimate/result?projectId=${projectId}`)
+      }
+    } catch {
+      message.error('操作失败')
+    } finally {
+      setSaving(false)
+    }
   }
 
-  const modalTitles = {
+  // 复杂度表格列
+  const complexityColumns: ColumnsType<ComplexityLevel> = [
+    { title: '等级', dataIndex: 'level', key: 'level', width: 100 },
+    {
+      title: '基准人天', dataIndex: 'workdays', key: 'workdays', width: 100,
+      render: (value: number, _: ComplexityLevel, index: number) => (
+        <InputNumber min={1} max={30} value={value} onChange={(val) => {
+          const newConfig = [...complexityConfig]
+          newConfig[index].workdays = val || 1
+          setComplexityConfig(newConfig)
+        }} style={{ width: 80 }} size="small" />
+      ),
+    },
+    { title: '', key: 'action', width: 40, render: (_, record) => <Button type="text" danger size="small" icon={<DeleteOutlined />} onClick={() => handleDelete('complexity', record.level)} /> },
+  ]
+
+  // 系统系数表格列
+  const systemColumns: ColumnsType<SystemCoefficient> = [
+    { title: '系统数', dataIndex: 'systemCount', key: 'systemCount', width: 80, render: (v) => `${v} 个` },
+    {
+      title: '系数', dataIndex: 'coefficient', key: 'coefficient', width: 100,
+      render: (value: number, _: SystemCoefficient, index: number) => (
+        <InputNumber min={1} max={3} step={0.1} precision={2} value={value} onChange={(val) => {
+          const newConfig = [...systemCoefficientConfig]
+          newConfig[index].coefficient = val || 1
+          setSystemCoefficientConfig(newConfig)
+        }} style={{ width: 80 }} size="small" />
+      ),
+    },
+    { title: '', key: 'action', width: 40, render: (_, record) => <Button type="text" danger size="small" icon={<DeleteOutlined />} onClick={() => handleDelete('system', record.systemCount)} /> },
+  ]
+
+  // 流程系数表格列
+  const processColumns: ColumnsType<ProcessCoefficient> = [
+    { title: '阶段', dataIndex: 'stage', key: 'stage', width: 100 },
+    {
+      title: '系数', dataIndex: 'coefficient', key: 'coefficient', width: 100,
+      render: (value: number, _: ProcessCoefficient, index: number) => (
+        <InputNumber min={0} max={1} step={0.01} precision={2} value={value} onChange={(val) => {
+          const newConfig = [...processCoefficientConfig]
+          newConfig[index].coefficient = val || 0.1
+          setProcessCoefficientConfig(newConfig)
+        }} style={{ width: 80 }} size="small" />
+      ),
+    },
+    { title: '', key: 'action', width: 40, render: (_, record) => <Button type="text" danger size="small" icon={<DeleteOutlined />} onClick={() => handleDelete('process', record.stage)} /> },
+  ]
+
+  // 技术栈系数表格列
+  const techStackColumns: ColumnsType<TechStackCoefficient> = [
+    { title: '技术类型', dataIndex: 'techType', key: 'techType', width: 120 },
+    {
+      title: '系数', dataIndex: 'coefficient', key: 'coefficient', width: 100,
+      render: (value: number, _: TechStackCoefficient, index: number) => (
+        <InputNumber min={1} max={2} step={0.1} precision={2} value={value} onChange={(val) => {
+          const newConfig = [...techStackCoefficientConfig]
+          newConfig[index].coefficient = val || 1
+          setTechStackCoefficientConfig(newConfig)
+        }} style={{ width: 80 }} size="small" />
+      ),
+    },
+    { title: '', key: 'action', width: 40, render: (_, record) => <Button type="text" danger size="small" icon={<DeleteOutlined />} onClick={() => handleDelete('techStack', record.techType)} /> },
+  ]
+
+  // 单价表格列
+  const unitPriceColumns: ColumnsType<UnitPrice> = [
+    { title: '角色', dataIndex: 'role', key: 'role', width: 100 },
+    {
+      title: '单价(元/天)', dataIndex: 'price', key: 'price', width: 120,
+      render: (value: number, _: UnitPrice, index: number) => (
+        <InputNumber min={500} max={5000} step={100} value={value} onChange={(val) => {
+          const newConfig = [...unitPriceConfig]
+          newConfig[index].price = val || 1000
+          setUnitPriceConfig(newConfig)
+        }} style={{ width: 100 }} size="small" />
+      ),
+    },
+    { title: '', key: 'action', width: 40, render: (_, record) => <Button type="text" danger size="small" icon={<DeleteOutlined />} onClick={() => handleDelete('unitPrice', record.role)} /> },
+  ]
+
+  // 弹窗表单
+  const renderModalForm = () => {
+    switch (modalType) {
+      case 'complexity':
+        return (
+          <>
+            <Form.Item name="level" label="复杂度等级" rules={[{ required: true }]}>
+              <Input placeholder="如：简单、中等、复杂" />
+            </Form.Item>
+            <Form.Item name="workdays" label="基准人天" rules={[{ required: true }]}>
+              <InputNumber min={1} max={30} style={{ width: '100%' }} />
+            </Form.Item>
+          </>
+        )
+      case 'system':
+        return (
+          <>
+            <Form.Item name="systemCount" label="关联系统数" rules={[{ required: true }]}>
+              <InputNumber min={1} max={10} style={{ width: '100%' }} />
+            </Form.Item>
+            <Form.Item name="coefficient" label="系数" rules={[{ required: true }]}>
+              <InputNumber min={1} max={3} step={0.1} precision={2} style={{ width: '100%' }} />
+            </Form.Item>
+          </>
+        )
+      case 'process':
+        return (
+          <>
+            <Form.Item name="stage" label="阶段名称" rules={[{ required: true }]}>
+              <Input placeholder="如：需求分析、开发" />
+            </Form.Item>
+            <Form.Item name="coefficient" label="系数" rules={[{ required: true }]}>
+              <InputNumber min={0} max={1} step={0.01} precision={2} style={{ width: '100%' }} />
+            </Form.Item>
+          </>
+        )
+      case 'techStack':
+        return (
+          <>
+            <Form.Item name="techType" label="技术类型" rules={[{ required: true }]}>
+              <Input placeholder="如：常规技术、新技术" />
+            </Form.Item>
+            <Form.Item name="coefficient" label="系数" rules={[{ required: true }]}>
+              <InputNumber min={1} max={2} step={0.1} precision={2} style={{ width: '100%' }} />
+            </Form.Item>
+          </>
+        )
+      case 'unitPrice':
+        return (
+          <>
+            <Form.Item name="role" label="角色名称" rules={[{ required: true }]}>
+              <Input placeholder="如：项目经理、高级开发" />
+            </Form.Item>
+            <Form.Item name="price" label="人天单价(元)" rules={[{ required: true }]}>
+              <InputNumber min={500} max={5000} step={100} style={{ width: '100%' }} />
+            </Form.Item>
+          </>
+        )
+      default:
+        return null
+    }
+  }
+
+  const modalTitles: Record<string, string> = {
     complexity: '新增复杂度等级',
     system: '新增系统关联度',
     process: '新增流程阶段',
@@ -698,27 +402,27 @@ export default function CostEstimateConfig() {
     unitPrice: '新增角色单价',
   }
 
-  if (loading) {
+  if (!projectId) {
     return (
       <div className="page-container">
-        <Card style={{ borderRadius: 16 }}>
-          <Spin size="large" description="加载默认配置..." />
+        <PageTitle title="参数配置" icon={<SettingOutlined />} />
+        <EstimateSteps current={currentStep} />
+        <Card style={{ borderRadius: 12, textAlign: 'center', padding: 32 }}>
+          <Text type="secondary">请从项目列表中选择项目进行配置</Text>
+          <br />
+          <Button type="primary" onClick={() => navigate('/cost-estimate/upload')} style={{ marginTop: 16, borderRadius: 8 }}>
+            新建预估
+          </Button>
         </Card>
       </div>
     )
   }
 
-  if (!projectId) {
+  if (loading) {
     return (
       <div className="page-container">
-        <Card style={{ borderRadius: 16 }}>
-          <Empty
-            description="缺少项目ID，请先上传需求文档"
-          >
-            <Button type="primary" onClick={() => navigate('/cost-estimate/upload')}>
-              前往上传
-            </Button>
-          </Empty>
+        <Card style={{ borderRadius: 12 }}>
+          <Spin size="large" tip="加载配置..." />
         </Card>
       </div>
     )
@@ -726,203 +430,85 @@ export default function CostEstimateConfig() {
 
   return (
     <div className="page-container">
-      {/* 步骤条 */}
-      <Card
-        style={{
-          borderRadius: 20,
-          marginBottom: 32,
-          border: '1px solid var(--color-border-light)',
-        }}
-      >
-        <Steps current={currentStep} items={stepItems} />
-      </Card>
+      <PageTitle
+        title="参数配置"
+        description="根据项目实际情况调整计算参数"
+        icon={<SettingOutlined />}
+      />
+      <EstimateSteps current={currentStep} />
 
-      {/* 功能介绍区域 */}
-      <div
-        style={{
-          background: 'linear-gradient(135deg, #10B981 0%, #34D399 100%)',
-          borderRadius: 24,
-          padding: '48px 48px',
-          marginBottom: 32,
-          position: 'relative',
-          overflow: 'hidden',
-        }}
-      >
-        <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: 28 }}>
-          <div
-            style={{
-              width: 68,
-              height: 68,
-              borderRadius: 18,
-              background: 'rgba(255, 255, 255, 0.18)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <SettingOutlined style={{ fontSize: 32, color: '#fff' }} />
-          </div>
-          <div>
-            <Title level={3} style={{ color: '#fff', margin: 0, marginBottom: 10 }}>
-              参数配置
-            </Title>
-            <Text style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: 15, lineHeight: 1.6 }}>
-              根据项目实际情况调整计算参数，获得更精准的成本预估结果
-            </Text>
-          </div>
-        </div>
-      </div>
-
-      {/* 配置卡片 - 更大间距 */}
-      <Row gutter={[24, 24]}>
-        {/* 复杂度基准配置 */}
-        <Col xs={24} lg={12}>
+      {/* 配置卡片 - 紧凑布局 */}
+      <Row gutter={[16, 16]} style={{ marginBottom: 20 }}>
+        <Col xs={24} md={12} lg={8}>
           <Card
-            style={{
-              borderRadius: 24,
-              border: '1px solid var(--color-border-light)',
-              height: '100%',
-            }}
+            title={<span style={{ fontSize: 14 }}>复杂度基准</span>}
+            size="small"
+            style={{ borderRadius: 12 }}
+            extra={<Button type="link" size="small" icon={<PlusOutlined />} onClick={() => openAddModal('complexity')}>新增</Button>}
           >
-            <ConfigCardHeader
-              title="复杂度基准配置"
-              subtitle="各复杂度等级对应基准人天"
-              icon={<CalculatorOutlined />}
-              color="#3B82F6"
-              onAdd={() => openAddModal('complexity')}
-            />
-            <Table
-              columns={complexityColumns}
-              dataSource={complexityConfig}
-              rowKey="level"
-              pagination={false}
-              size="small"
-            />
+            {complexityConfig.length > 0 ? (
+              <Table columns={complexityColumns} dataSource={complexityConfig} rowKey="level" pagination={false} size="small" />
+            ) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无配置" />}
           </Card>
         </Col>
 
-        {/* 系统关联度系数配置 */}
-        <Col xs={24} lg={12}>
+        <Col xs={24} md={12} lg={8}>
           <Card
-            style={{
-              borderRadius: 24,
-              border: '1px solid var(--color-border-light)',
-              height: '100%',
-            }}
+            title={<span style={{ fontSize: 14 }}>系统关联系数</span>}
+            size="small"
+            style={{ borderRadius: 12 }}
+            extra={<Button type="link" size="small" icon={<PlusOutlined />} onClick={() => openAddModal('system')}>新增</Button>}
           >
-            <ConfigCardHeader
-              title="系统关联度系数"
-              subtitle="关联系统数量对应系数"
-              icon={<ThunderboltOutlined />}
-              color="#8B5CF6"
-              onAdd={() => openAddModal('system')}
-            />
-            <Table
-              columns={systemCoefficientColumns}
-              dataSource={systemCoefficientConfig}
-              rowKey="systemCount"
-              pagination={false}
-              size="small"
-            />
+            {systemCoefficientConfig.length > 0 ? (
+              <Table columns={systemColumns} dataSource={systemCoefficientConfig} rowKey="systemCount" pagination={false} size="small" />
+            ) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无配置" />}
           </Card>
         </Col>
 
-        {/* 流程系数配置 */}
-        <Col xs={24} lg={12}>
+        <Col xs={24} md={12} lg={8}>
           <Card
-            style={{
-              borderRadius: 24,
-              border: '1px solid var(--color-border-light)',
-              height: '100%',
-            }}
+            title={<span style={{ fontSize: 14 }}>流程系数</span>}
+            size="small"
+            style={{ borderRadius: 12 }}
+            extra={<Button type="link" size="small" icon={<PlusOutlined />} onClick={() => openAddModal('process')}>新增</Button>}
           >
-            <ConfigCardHeader
-              title="流程系数配置"
-              subtitle="各阶段工作量分配系数"
-              icon={<RocketOutlined />}
-              color="#10B981"
-              onAdd={() => openAddModal('process')}
-            />
-            <Table
-              columns={processCoefficientColumns}
-              dataSource={processCoefficientConfig}
-              rowKey="stage"
-              pagination={false}
-              size="small"
-            />
+            {processCoefficientConfig.length > 0 ? (
+              <Table columns={processColumns} dataSource={processCoefficientConfig} rowKey="stage" pagination={false} size="small" />
+            ) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无配置" />}
           </Card>
         </Col>
 
-        {/* 技术栈难度系数配置 */}
-        <Col xs={24} lg={12}>
+        <Col xs={24} md={12} lg={8}>
           <Card
-            style={{
-              borderRadius: 24,
-              border: '1px solid var(--color-border-light)',
-              height: '100%',
-            }}
+            title={<span style={{ fontSize: 14 }}>技术栈系数</span>}
+            size="small"
+            style={{ borderRadius: 12 }}
+            extra={<Button type="link" size="small" icon={<PlusOutlined />} onClick={() => openAddModal('techStack')}>新增</Button>}
           >
-            <ConfigCardHeader
-              title="技术栈难度系数"
-              subtitle="不同技术类型难度系数"
-              icon={<InfoCircleOutlined />}
-              color="#F59E0B"
-              onAdd={() => openAddModal('techStack')}
-            />
-            <Table
-              columns={techStackCoefficientColumns}
-              dataSource={techStackCoefficientConfig}
-              rowKey="techType"
-              pagination={false}
-              size="small"
-            />
+            {techStackCoefficientConfig.length > 0 ? (
+              <Table columns={techStackColumns} dataSource={techStackCoefficientConfig} rowKey="techType" pagination={false} size="small" />
+            ) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无配置" />}
           </Card>
         </Col>
 
-        {/* 人天单价配置 */}
-        <Col xs={24} lg={12}>
+        <Col xs={24} md={12} lg={8}>
           <Card
-            style={{
-              borderRadius: 24,
-              border: '1px solid var(--color-border-light)',
-              height: '100%',
-            }}
+            title={<span style={{ fontSize: 14 }}>人天单价</span>}
+            size="small"
+            style={{ borderRadius: 12 }}
+            extra={<Button type="link" size="small" icon={<PlusOutlined />} onClick={() => openAddModal('unitPrice')}>新增</Button>}
           >
-            <ConfigCardHeader
-              title="人天单价配置"
-              subtitle="各角色人天单价(元)"
-              icon={<CalculatorOutlined />}
-              color="#EF4444"
-              onAdd={() => openAddModal('unitPrice')}
-            />
-            <Table
-              columns={unitPriceColumns}
-              dataSource={unitPriceConfig}
-              rowKey="role"
-              pagination={false}
-              size="small"
-            />
+            {unitPriceConfig.length > 0 ? (
+              <Table columns={unitPriceColumns} dataSource={unitPriceConfig} rowKey="role" pagination={false} size="small" />
+            ) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无配置" />}
           </Card>
         </Col>
 
-        {/* 管理系数配置 */}
-        <Col xs={24} lg={12}>
-          <Card
-            style={{
-              borderRadius: 24,
-              border: '1px solid var(--color-border-light)',
-              height: '100%',
-            }}
-          >
-            <ConfigCardHeader
-              title="管理系数配置"
-              subtitle="项目管理成本系数"
-              icon={<SettingOutlined />}
-              color="#64748b"
-            />
-            <div style={{ padding: '20px 0' }}>
+        <Col xs={24} md={12} lg={8}>
+          <Card title={<span style={{ fontSize: 14 }}>管理系数</span>} size="small" style={{ borderRadius: 12 }}>
+            <div style={{ paddingTop: 8 }}>
               <Form layout="inline">
-                <Form.Item label="管理系数" style={{ marginBottom: 0 }}>
+                <Form.Item label="系数" style={{ marginBottom: 0 }}>
                   <InputNumber
                     min={0}
                     max={0.5}
@@ -930,63 +516,32 @@ export default function CostEstimateConfig() {
                     precision={2}
                     value={managementCoefficient}
                     onChange={(val) => setManagementCoefficient(val || 0.15)}
-                    style={{ width: 150, borderRadius: 10 }}
+                    style={{ width: 100 }}
+                    size="small"
                   />
                 </Form.Item>
-                <Tooltip title="管理系数用于计算项目管理成本，建议范围 0.10 - 0.20">
-                  <InfoCircleOutlined style={{ color: '#64748b', marginLeft: 10 }} />
+                <Tooltip title="建议范围: 0.10 - 0.20">
+                  <Text type="secondary" style={{ fontSize: 12 }}>当前: {managementCoefficient.toFixed(2)}</Text>
                 </Tooltip>
               </Form>
-              <Text type="secondary" style={{ marginTop: 16, display: 'block', fontSize: 13 }}>
-                建议范围: 0.10 - 0.20，当前值: {managementCoefficient.toFixed(2)}
-              </Text>
             </div>
           </Card>
         </Col>
       </Row>
 
       {/* 操作按钮 */}
-      <Card
-        style={{
-          borderRadius: 20,
-          marginTop: 32,
-          border: '1px solid var(--color-border-light)',
-        }}
-      >
+      <Card style={{ borderRadius: 12 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Button
-            size="large"
-            onClick={() => navigate('/cost-estimate/upload')}
-            style={{ borderRadius: 14, height: 48 }}
-          >
+          <Button onClick={() => navigate(`/cost-estimate/ai-analysis?projectId=${projectId}`)} style={{ borderRadius: 8 }}>
             <ArrowLeftOutlined style={{ marginRight: 8 }} />
-            上一步：文件上传
+            上一步
           </Button>
-          <div style={{ display: 'flex', gap: 16 }}>
-            <Button
-              size="large"
-              icon={<SaveOutlined />}
-              onClick={handleSaveConfig}
-              loading={saving}
-              style={{ borderRadius: 14, height: 48 }}
-            >
-              保存参数模板
+          <div style={{ display: 'flex', gap: 12 }}>
+            <Button icon={<SaveOutlined />} onClick={handleSaveConfig} loading={saving} style={{ borderRadius: 8 }}>
+              保存配置
             </Button>
-            <Button
-              type="primary"
-              size="large"
-              icon={<ArrowRightOutlined />}
-              onClick={handleNext}
-              loading={saving}
-              style={{
-                borderRadius: 14,
-                height: 48,
-                background: 'linear-gradient(135deg, #3B82F6 0%, #8B5CF6 100%)',
-                border: 'none',
-                fontWeight: 600,
-              }}
-            >
-              下一步：查看解析结果
+            <Button type="primary" onClick={handleNext} loading={saving} style={{ borderRadius: 8, fontWeight: 500 }}>
+              开始计算
               <ArrowRightOutlined style={{ marginLeft: 8 }} />
             </Button>
           </div>
@@ -999,11 +554,11 @@ export default function CostEstimateConfig() {
         open={modalVisible}
         onOk={handleAdd}
         onCancel={() => setModalVisible(false)}
-        okText="确认添加"
+        okText="确认"
         cancelText="取消"
       >
         <Form form={form} layout="vertical">
-          {modalFormItems[modalType]}
+          {renderModalForm()}
         </Form>
       </Modal>
     </div>

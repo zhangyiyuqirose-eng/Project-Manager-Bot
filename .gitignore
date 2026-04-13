@@ -46,6 +46,32 @@ SourceCode.zip
 
 # Uploads
 uploads/
+SourceCode/backend/uploads/
+
+# Test results
+test-results/
+SourceCode/frontend/test-results/
+
+# E2E test screenshots
+**/test-results/**
+
+# Archives and backups
+*.tar.gz
+*.zip
+backups/
+reference/
+SourceCode_backup*
+
+# OCR service (external)
+OCRService/
+
+# Local docs and configs
+DBeaver连接配置.md
+数据库ER关系图.md
+数据库表结构文档.tar.gz
+数据库访问指南.md
+数据库访问指南.tar.gz
+代码分析报告.md
 
 # Reference projects
 workload_assessment/

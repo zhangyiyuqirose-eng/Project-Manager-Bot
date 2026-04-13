@@ -15,26 +15,28 @@ import {
   Progress,
   Space,
   Tooltip,
+  Statistic,
 } from 'antd'
 import {
   FileTextOutlined,
   SettingOutlined,
   FileSearchOutlined,
   BarChartOutlined,
+  InfoCircleOutlined,
   ReloadOutlined,
   DownloadOutlined,
   CheckCircleOutlined,
   ExclamationCircleOutlined,
   ArrowLeftOutlined,
   RocketOutlined,
-  RiseOutlined,
-  TeamOutlined,
   DashboardOutlined,
   ThunderboltOutlined,
+  PlusOutlined,
+  EyeOutlined,
 } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import { Pie, Column } from '@ant-design/charts'
-import { estimateApi } from '@/api'
+import { estimateApi, projectApi } from '@/api'
 import type {
   EstimateResult,
   StageBreakdown,
@@ -43,7 +45,7 @@ import type {
 
 const { Title, Text } = Typography
 
-// 步骤条配置（4步）
+// 步骤条配置（5步）：文件上传->项目信息->AI分析->参数配置->结果报告
 const stepItems = [
   {
     title: '文件上传',
@@ -51,85 +53,74 @@ const stepItems = [
     icon: <FileTextOutlined />,
   },
   {
+    title: '项目信息',
+    description: '填写项目基本信息',
+    icon: <InfoCircleOutlined />,
+  },
+  {
+    title: 'AI分析',
+    description: '解析功能模块',
+    icon: <FileSearchOutlined />,
+  },
+  {
     title: '参数配置',
     description: '配置计算参数',
     icon: <SettingOutlined />,
   },
   {
-    title: '文档解析结果',
-    description: '查看功能点详情',
-    icon: <FileSearchOutlined />,
-  },
-  {
-    title: '结果展示',
+    title: '结果报告',
     description: '查看成本预估',
     icon: <BarChartOutlined />,
   },
 ]
 
-// 统计卡片组件 - 简约现代风格
-interface StatCardProps {
-  title: string
-  value: number | string
-  suffix?: string
-  precision?: number
-  icon: React.ReactNode
-  color: string
-  gradient: string
+// 项目列表项
+interface ProjectListItem {
+  id: number
+  projectName: string
+  projectType: string | null
+  contractAmount: number | null
+  status: string
+  createdAt: string
+  members: Array<{ id: number; name: string; level: string; role: string | null }>
+  estimateResults: Array<{ id: number; totalManDay: number; totalCost: number }>
+  estimateConfigs: Array<{ id: number }>
 }
 
-function StatCard({ title, value, suffix, precision, icon, color, gradient }: StatCardProps) {
+// KPI卡片配置
+interface KPICardProps {
+  title: string
+  value: number
+  unit: string
+  precision?: number
+  bgColor: string
+  borderColor: string
+}
+
+function KPICard({ title, value, unit, precision = 2, bgColor, borderColor }: KPICardProps) {
   return (
-    <Card
+    <div
       style={{
-        borderRadius: 20,
-        border: '1px solid var(--color-border-light)',
+        background: bgColor,
+        borderRadius: 12,
+        padding: '20px 24px',
+        border: `1px solid ${borderColor}`,
+        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.05)',
         height: '100%',
-        overflow: 'hidden',
       }}
     >
-      <div
-        style={{
-          background: gradient,
-          padding: '28px 24px',
-          borderRadius: 16,
-          marginBottom: 20,
-        }}
-      >
-        <div
-          style={{
-            width: 52,
-            height: 52,
-            borderRadius: 14,
-            background: 'rgba(255, 255, 255, 0.2)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            marginBottom: 14,
-          }}
-        >
-          <span style={{ fontSize: 26, color: '#fff' }}>{icon}</span>
-        </div>
-        <Text style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: 13 }}>{title}</Text>
+      <div style={{ marginBottom: 8 }}>
+        <Text style={{ fontSize: 14, color: '#64748B' }}>{title}</Text>
       </div>
-      <div style={{ textAlign: 'center' }}>
-        <Text
-          strong
-          style={{
-            fontSize: 34,
-            color,
-            fontWeight: 700,
-          }}
-        >
-          {typeof value === 'number' && precision ? value.toFixed(precision) : value}
+      <div style={{ marginBottom: 4 }}>
+        <Text strong style={{ fontSize: 32, color: '#1E293B' }}>
+          {precision ? value.toFixed(precision) : value}
         </Text>
-        {suffix && (
-          <Text type="secondary" style={{ fontSize: 14, marginLeft: 6 }}>
-            {suffix}
-          </Text>
-        )}
       </div>
-    </Card>
+      <div>
+        <Text style={{ fontSize: 13, color: '#64748B' }}>{unit}</Text>
+      </div>
+    </div>
   )
 }
 
@@ -138,14 +129,47 @@ export default function CostEstimateResult() {
   const [searchParams] = useSearchParams()
   const projectId = searchParams.get('projectId')
 
-  const [currentStep] = useState(3)
+  const [currentStep] = useState(4)
   const [loading, setLoading] = useState(true)
   const [recalculating, setRecalculating] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [activeTab, setActiveTab] = useState('overview')
 
+  // 项目列表状态
+  const [projects, setProjects] = useState<ProjectListItem[]>([])
+  const [projectsLoading, setProjectsLoading] = useState(false)
+  const [totalProjects, setTotalProjects] = useState(0)
+
   // 结果数据
   const [result, setResult] = useState<EstimateResult | null>(null)
+
+  // 加载项目列表（当没有projectId时）
+  useEffect(() => {
+    if (!projectId) {
+      loadProjects()
+    }
+  }, [projectId])
+
+  // 加载项目列表
+  const loadProjects = async () => {
+    setProjectsLoading(true)
+    try {
+      const response = await projectApi.getList({ pageSize: 100 })
+      if (response.data.code === 0 || response.data.code === 200) {
+        const projectData = response.data.data || []
+        // 过滤出有预估结果的项目
+        const projectsWithResults = projectData.filter((p: any) =>
+          p.estimateResults && p.estimateResults.length > 0
+        )
+        setProjects(projectsWithResults)
+        setTotalProjects(projectsWithResults.length)
+      }
+    } catch {
+      message.error('加载项目列表失败')
+    } finally {
+      setProjectsLoading(false)
+    }
+  }
 
   // 加载结果数据
   useEffect(() => {
@@ -296,7 +320,7 @@ export default function CostEstimateResult() {
     }
   }
 
-  // 团队工作量饼图配置 - 现代专业设计
+  // 团队工作量饼图配置 - 环形饼图
   const teamPieConfig = {
     appendPadding: [20, 20, 20, 20],
     data: result?.teamBreakdown?.map((item) => ({
@@ -306,10 +330,23 @@ export default function CostEstimateResult() {
     angleField: 'value',
     colorField: 'type',
     radius: 0.85,
-    innerRadius: 0.65,
-    // 现代渐变色方案
-    color: ['#667EEA', '#764BA2', '#F093FB', '#F5576C', '#4FACFE', '#00F2FE'],
-    // 外部标签带引导线
+    innerRadius: 0.6,
+    // 指定配色
+    color: (datum: any) => {
+      const colorMap: Record<string, string> = {
+        '产品团队': '#3B82F6',
+        '产品': '#3B82F6',
+        'UI团队': '#A78BFA',
+        'UI': '#A78BFA',
+        '研发团队': '#34D399',
+        '研发': '#34D399',
+        '测试团队': '#FB923C',
+        '测试': '#FB923C',
+        '项目管理': '#F472B6',
+        'PM': '#F472B6',
+      }
+      return colorMap[datum.type] || '#94A3B8'
+    },
     label: {
       type: 'spider' as const,
       formatter: (datum: any) => {
@@ -322,14 +359,7 @@ export default function CostEstimateResult() {
         fill: '#374151',
         fontWeight: 500,
       },
-      labelLine: {
-        style: {
-          stroke: '#9CA3AF',
-          lineWidth: 1,
-        },
-      },
     },
-    // 右侧图例
     legend: {
       position: 'right' as const,
       layout: 'vertical' as const,
@@ -356,15 +386,13 @@ export default function CostEstimateResult() {
     interactions: [
       { type: 'element-selected' },
       { type: 'element-active' },
-      { type: 'pie-statistic-active' },
     ],
-    // 中心统计信息
     statistic: {
       title: {
-        offsetY: -12,
+        offsetY: -8,
         style: {
           fontSize: '13px',
-          color: '#6B7280',
+          color: '#64748B',
           fontWeight: 400,
         },
         customHtml: () => '总工作量',
@@ -372,29 +400,28 @@ export default function CostEstimateResult() {
       content: {
         offsetY: 8,
         style: {
-          fontSize: '28px',
-          color: '#1F2937',
+          fontSize: '24px',
+          color: '#1E293B',
           fontWeight: 700,
         },
-        customHtml: () => `${result?.totalManDay?.toFixed(1) || '0'}<span style="font-size:14px;color:#6B7280;font-weight:400"> 人天</span>`,
+        customHtml: () => `${result?.totalManDay?.toFixed(1) || '0'}<span style="font-size:13px;color:#64748B;font-weight:400"> 人天</span>`,
       },
     },
-    // 悬浮状态样式
     state: {
       active: {
         style: (_element: any) => {
           return {
-            lineWidth: 3,
+            lineWidth: 2,
             stroke: '#fff',
-            shadowBlur: 12,
-            shadowColor: 'rgba(0, 0, 0, 0.15)',
+            shadowBlur: 8,
+            shadowColor: 'rgba(0, 0, 0, 0.1)',
           }
         },
       },
     },
   }
 
-  // 各阶段工作量柱状图配置
+  // 各阶段工作量柱状图配置 - 分组柱状图
   const stageColumnConfig = {
     data: result?.stageBreakdown?.map((item) => ({
       stage: item.stage,
@@ -403,20 +430,59 @@ export default function CostEstimateResult() {
     })) || [],
     xField: 'stage',
     yField: 'workdays',
-    color: '#3B82F6',
+    // 各阶段配色
+    color: (datum: any) => {
+      const colorMap: Record<string, string> = {
+        '需求': '#3B82F6',
+        'UI设计': '#A78BFA',
+        '技术设计': '#60A5FA',
+        '开发': '#34D399',
+        '技术测试': '#FB923C',
+        '性能测试': '#94A3B8',
+        '投产上线': '#FBBF24',
+      }
+      return colorMap[datum.stage] || '#3B82F6'
+    },
     label: {
       position: 'top' as const,
       style: {
-        fill: '#1D2129',
+        fill: '#1E293B',
         fontSize: 12,
+        fontWeight: 500,
       },
+      formatter: (datum: any) => `${datum.workdays.toFixed(1)}`,
     },
     meta: {
       stage: { alias: '阶段' },
       workdays: { alias: '人天' },
     },
     columnStyle: {
-      radius: [8, 8, 0, 0],
+      radius: [6, 6, 0, 0],
+    },
+    yAxis: {
+      grid: {
+        line: {
+          style: {
+            stroke: '#E2E8F0',
+            lineWidth: 1,
+          },
+        },
+      },
+      label: {
+        style: {
+          fill: '#64748B',
+          fontSize: 12,
+        },
+      },
+    },
+    xAxis: {
+      label: {
+        style: {
+          fill: '#374151',
+          fontSize: 12,
+        },
+        autoRotate: true,
+      },
     },
   }
 
@@ -596,6 +662,81 @@ export default function CostEstimateResult() {
     },
   ]
 
+  // 项目列表表格列配置
+  const projectColumns: ColumnsType<ProjectListItem> = [
+    {
+      title: '项目名称',
+      dataIndex: 'projectName',
+      key: 'projectName',
+      width: 200,
+      render: (value: string) => (
+        <Text strong style={{ color: '#0f172a' }}>{value}</Text>
+      )
+    },
+    {
+      title: '项目类型',
+      dataIndex: 'projectType',
+      key: 'projectType',
+      width: 100,
+      render: (value: string) => value ? (
+        <Tag style={{ borderRadius: 8, background: '#3B82F615', color: '#3B82F6', border: 'none' }}>
+          {value}
+        </Tag>
+      ) : '-'
+    },
+    {
+      title: '团队成员',
+      key: 'members',
+      width: 100,
+      render: (_: any, record: ProjectListItem) => (
+        <Tag style={{ borderRadius: 8, background: '#8B5CF615', color: '#8B5CF6', border: 'none' }}>
+          {record.members?.length || 0} 人
+        </Tag>
+      )
+    },
+    {
+      title: '预估结果',
+      key: 'estimateResult',
+      width: 150,
+      render: (_: any, record: ProjectListItem) => {
+        const result = record.estimateResults?.[0]
+        if (result) {
+          return (
+            <div>
+              <Text style={{ color: '#10B981', fontWeight: 500 }}>{result.totalManDay.toFixed(1)} 人天</Text>
+              <br />
+              <Text type="secondary" style={{ fontSize: 12 }}>¥{result.totalCost.toFixed(0)}</Text>
+            </div>
+          )
+        }
+        return <Tag style={{ borderRadius: 8, background: '#F59E0B15', color: '#F59E0B', border: 'none' }}>未计算</Tag>
+      }
+    },
+    {
+      title: '创建时间',
+      dataIndex: 'createdAt',
+      key: 'createdAt',
+      width: 120,
+      render: (value: string) => new Date(value).toLocaleDateString('zh-CN')
+    },
+    {
+      title: '操作',
+      key: 'action',
+      width: 120,
+      render: (_: any, record: ProjectListItem) => (
+        <Button
+          type="primary"
+          size="small"
+          icon={<EyeOutlined />}
+          onClick={() => navigate(`/cost-estimate/result?projectId=${record.id}`)}
+          style={{ borderRadius: 8 }}
+        >
+          查看结果
+        </Button>
+      )
+    }
+  ]
+
   // 占比合规校验结果
   const complianceChecks = result?.stageBreakdown?.map((stage) => {
     const expectedRanges: Record<string, { min: number; max: number }> = {
@@ -618,6 +759,130 @@ export default function CostEstimateResult() {
       isCompliant,
     }
   }) || []
+
+  // 渲染项目列表页面（当没有projectId时）
+  if (!projectId) {
+    return (
+      <div className="page-container">
+        {/* 功能介绍区域 */}
+        <div
+          style={{
+            background: 'linear-gradient(135deg, #8B5CF6 0%, #EC4899 100%)',
+            borderRadius: 24,
+            padding: '48px 48px',
+            marginBottom: 32,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 28 }}>
+            <div
+              style={{
+                width: 68,
+                height: 68,
+                borderRadius: 18,
+                background: 'rgba(255, 255, 255, 0.18)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <BarChartOutlined style={{ fontSize: 32, color: '#fff' }} />
+            </div>
+            <div>
+              <Title level={3} style={{ color: '#fff', margin: 0, marginBottom: 10 }}>
+                预估结果
+              </Title>
+              <Text style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: 15 }}>
+                查看已完成成本预估的项目结果
+              </Text>
+            </div>
+          </div>
+        </div>
+
+        {/* 步骤条 */}
+        <Card
+          style={{
+            borderRadius: 20,
+            marginBottom: 32,
+            border: '1px solid var(--color-border-light)',
+          }}
+        >
+          <Steps current={currentStep} items={stepItems} />
+        </Card>
+
+        {/* 统计概览 */}
+        <Row gutter={[20, 20]} style={{ marginBottom: 24 }}>
+          <Col xs={12} sm={8}>
+            <Card style={{ borderRadius: 16, border: '1px solid var(--color-border-light)' }}>
+              <Statistic
+                title="已预估项目"
+                value={totalProjects}
+                suffix="个"
+                valueStyle={{ color: '#8B5CF6' }}
+              />
+            </Card>
+          </Col>
+          <Col xs={12} sm={8}>
+            <Card style={{ borderRadius: 16, border: '1px solid var(--color-border-light)' }}>
+              <Statistic
+                title="总人天"
+                value={projects.reduce((sum, p) => sum + (p.estimateResults?.[0]?.totalManDay || 0), 0)}
+                suffix="天"
+                precision={1}
+                valueStyle={{ color: '#3B82F6' }}
+              />
+            </Card>
+          </Col>
+          <Col xs={12} sm={8}>
+            <Card style={{ borderRadius: 16, border: '1px solid var(--color-border-light)' }}>
+              <Statistic
+                title="总成本"
+                value={projects.reduce((sum, p) => sum + (p.estimateResults?.[0]?.totalCost || 0), 0)}
+                suffix="元"
+                precision={0}
+                valueStyle={{ color: '#EF4444' }}
+              />
+            </Card>
+          </Col>
+        </Row>
+
+        {/* 项目列表 */}
+        <Card
+          style={{
+            borderRadius: 24,
+            border: '1px solid var(--color-border-light)',
+          }}
+        >
+          <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Title level={4} style={{ margin: 0 }}>
+              <BarChartOutlined style={{ marginRight: 10, color: '#8B5CF6' }} />
+              项目列表
+            </Title>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => navigate('/cost-estimate/upload')}
+              style={{
+                borderRadius: 10,
+                background: 'linear-gradient(135deg, #3B82F6 0%, #8B5CF6 100%)',
+                border: 'none',
+              }}
+            >
+              新建预估
+            </Button>
+          </div>
+
+          <Table
+            columns={projectColumns}
+            dataSource={projects}
+            rowKey="id"
+            loading={projectsLoading}
+            pagination={{ pageSize: 10, showSizeChanger: false }}
+            locale={{ emptyText: '暂无预估结果，请先完成成本预估流程' }}
+          />
+        </Card>
+      </div>
+    )
+  }
 
   if (loading) {
     return (
@@ -651,7 +916,7 @@ export default function CostEstimateResult() {
           <Button
             type="primary"
             size="large"
-            onClick={() => navigate(`/cost-estimate/parse-result?projectId=${projectId}`)}
+            onClick={() => navigate(`/cost-estimate/ai-analysis?projectId=${projectId}`)}
             style={{
               borderRadius: 12,
               height: 44,
@@ -659,7 +924,7 @@ export default function CostEstimateResult() {
               border: 'none',
             }}
           >
-            前往解析结果
+            前往AI分析
           </Button>
         </Card>
       </div>
@@ -667,18 +932,7 @@ export default function CostEstimateResult() {
   }
 
   return (
-    <div className="page-container">
-      {/* 步骤条 */}
-      <Card
-        style={{
-          borderRadius: 20,
-          marginBottom: 32,
-          border: '1px solid var(--color-border-light)',
-        }}
-      >
-        <Steps current={currentStep} items={stepItems} />
-      </Card>
-
+    <div className="page-container" style={{ background: '#F8FAFC', minHeight: '100vh' }}>
       {/* 功能介绍区域 */}
       <div
         style={{
@@ -715,49 +969,57 @@ export default function CostEstimateResult() {
         </div>
       </div>
 
-      {/* 核心指标卡片 */}
-      <Row gutter={[20, 20]} style={{ marginBottom: 32 }}>
+      {/* 步骤条 */}
+      <Card
+        style={{
+          borderRadius: 20,
+          marginBottom: 32,
+          border: '1px solid var(--color-border-light)',
+        }}
+      >
+        <Steps current={currentStep} items={stepItems} />
+      </Card>
+
+      {/* 核心指标卡片 - KPI风格 */}
+      <Row gutter={[16, 16]} style={{ marginBottom: 20 }}>
         <Col xs={12} sm={6}>
-          <StatCard
-            title="总人天"
+          <KPICard
+            title="总工作量"
             value={result.totalManDay}
-            suffix="天"
-            precision={1}
-            icon={<TeamOutlined />}
-            color="#3B82F6"
-            gradient="linear-gradient(135deg, #3B82F6 0%, #60A5FA 100%)"
-          />
-        </Col>
-        <Col xs={12} sm={6}>
-          <StatCard
-            title="总成本"
-            value={result.totalCost}
-            suffix="元"
+            unit="人天"
             precision={2}
-            icon={<RiseOutlined />}
-            color="#EF4444"
-            gradient="linear-gradient(135deg, #EF4444 0%, #F87171 100%)"
+            bgColor="#EFF6FF"
+            borderColor="#DBEAFE"
           />
         </Col>
         <Col xs={12} sm={6}>
-          <StatCard
-            title="功能模块"
-            value={result.moduleCount}
-            suffix="个"
-            icon={<DashboardOutlined />}
-            color="#10B981"
-            gradient="linear-gradient(135deg, #10B981 0%, #34D399 100%)"
-          />
-        </Col>
-        <Col xs={12} sm={6}>
-          <StatCard
-            title="人月"
+          <KPICard
+            title="人月折算"
             value={result.manMonth}
-            suffix="月"
-            precision={1}
-            icon={<ThunderboltOutlined />}
-            color="#F59E0B"
-            gradient="linear-gradient(135deg, #F59E0B 0%, #FBBF24 100%)"
+            unit="人月"
+            precision={2}
+            bgColor="#ECFDF5"
+            borderColor="#D1FAE5"
+          />
+        </Col>
+        <Col xs={12} sm={6}>
+          <KPICard
+            title="预估总成本"
+            value={result.totalCost / 10000}
+            unit="万元"
+            precision={2}
+            bgColor="#FFF7ED"
+            borderColor="#FFEDD5"
+          />
+        </Col>
+        <Col xs={12} sm={6}>
+          <KPICard
+            title="功能模块数"
+            value={result.moduleCount}
+            unit="个模块"
+            precision={0}
+            bgColor="#FAF5FF"
+            borderColor="#F3E8FF"
           />
         </Col>
       </Row>
@@ -765,9 +1027,11 @@ export default function CostEstimateResult() {
       {/* Tab切换 */}
       <Card
         style={{
-          borderRadius: 24,
-          border: '1px solid var(--color-border-light)',
+          borderRadius: 12,
+          border: '1px solid #E2E8F0',
+          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.05)',
         }}
+        bodyStyle={{ padding: '16px 24px' }}
       >
         <Tabs
           activeKey={activeTab}
@@ -779,17 +1043,22 @@ export default function CostEstimateResult() {
               icon: <DashboardOutlined />,
               children: (
                 <div>
-                  {/* 图表区域 */}
-                  <Row gutter={[24, 24]}>
+                  {/* 图表区域 - 左右分栏 */}
+                  <Row gutter={16}>
                     <Col xs={24} lg={12}>
                       <Card
                         title={
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                            <TeamOutlined style={{ color: '#3B82F6' }} />
-                            <Text strong>团队工作量分布</Text>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <Text strong style={{ fontSize: 15, color: '#1E293B' }}>团队工作量分布</Text>
                           </div>
                         }
-                        style={{ borderRadius: 18, border: '1px solid var(--color-border-light)' }}
+                        style={{
+                          borderRadius: 12,
+                          border: '1px solid #E2E8F0',
+                          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.05)',
+                          height: '100%',
+                        }}
+                        bodyStyle={{ padding: '16px 20px' }}
                       >
                         <Pie {...teamPieConfig} />
                       </Card>
@@ -797,12 +1066,17 @@ export default function CostEstimateResult() {
                     <Col xs={24} lg={12}>
                       <Card
                         title={
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                            <BarChartOutlined style={{ color: '#8B5CF6' }} />
-                            <Text strong>各阶段工作量</Text>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <Text strong style={{ fontSize: 15, color: '#1E293B' }}>各阶段工作量</Text>
                           </div>
                         }
-                        style={{ borderRadius: 18, border: '1px solid var(--color-border-light)' }}
+                        style={{
+                          borderRadius: 12,
+                          border: '1px solid #E2E8F0',
+                          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.05)',
+                          height: '100%',
+                        }}
+                        bodyStyle={{ padding: '16px 20px' }}
                       >
                         <Column {...stageColumnConfig} />
                       </Card>
@@ -887,7 +1161,7 @@ export default function CostEstimateResult() {
               icon: <CheckCircleOutlined />,
               children: (
                 <div>
-                  {/* 占比合规校验结果 */}
+                  {/* 占比合规校验结果 - 表格样式 */}
                   <Card
                     title={
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -897,94 +1171,155 @@ export default function CostEstimateResult() {
                     }
                     style={{ borderRadius: 18, marginBottom: 28, border: '1px solid var(--color-border-light)' }}
                   >
-                    <Row gutter={[20, 20]}>
-                      {complianceChecks.map((check) => (
-                        <Col xs={24} sm={12} md={8} key={check.stage}>
-                          <Card
-                            size="small"
-                            style={{
-                              borderRadius: 14,
-                              border: check.isCompliant ? '1px solid rgba(16, 185, 129, 0.25)' : '1px solid rgba(239, 68, 68, 0.25)',
-                              background: check.isCompliant
-                                ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(52, 211, 153, 0.08) 100%)'
-                                : 'linear-gradient(135deg, rgba(239, 68, 68, 0.08) 0%, rgba(248, 113, 113, 0.08) 100%)',
-                            }}
-                          >
-                            <div style={{ marginBottom: 14 }}>
-                              <Text strong style={{ fontSize: 14 }}>{check.stage}</Text>
-                            </div>
-                            <div style={{ marginBottom: 10 }}>
-                              <Text type="secondary" style={{ fontSize: 12 }}>实际占比</Text>
-                              <br />
-                              <Text strong style={{ color: '#0f172a' }}>
-                                {(check.actualRatio * 100).toFixed(1)}%
-                              </Text>
-                            </div>
-                            <div style={{ marginBottom: 10 }}>
-                              <Text type="secondary" style={{ fontSize: 12 }}>预期范围</Text>
-                              <br />
-                              <Text style={{ color: '#64748b' }}>
-                                {(check.expectedMin * 100).toFixed(1)}% - {(check.expectedMax * 100).toFixed(1)}%
-                              </Text>
-                            </div>
-                            <div>
-                              {check.isCompliant ? (
-                                <Tag
-                                  icon={<CheckCircleOutlined />}
-                                  style={{
-                                    borderRadius: 10,
-                                    background: '#10B981',
-                                    color: '#fff',
-                                    border: 'none',
-                                  }}
-                                >
-                                  合规
+                    <Table
+                      dataSource={complianceChecks.map((check, index) => ({
+                        key: index,
+                        stage: check.stage,
+                        workdays: result?.stageBreakdown?.find(s => s.stage === check.stage)?.workdays || 0,
+                        actualRatio: (check.actualRatio * 100).toFixed(1),
+                        expectedRange: `${(check.expectedMin * 100).toFixed(0)}% ~ ${(check.expectedMax * 100).toFixed(0)}%`,
+                        isCompliant: check.isCompliant,
+                        progress: check.actualRatio * 100,
+                        minPercent: check.expectedMin * 100,
+                        maxPercent: check.expectedMax * 100,
+                      }))}
+                      pagination={false}
+                      columns={[
+                        {
+                          title: '阶段',
+                          dataIndex: 'stage',
+                          key: 'stage',
+                          width: 120,
+                          render: (value: string) => (
+                            <Text strong style={{ color: '#0f172a' }}>{value}</Text>
+                          ),
+                        },
+                        {
+                          title: '工作量（人天）',
+                          dataIndex: 'workdays',
+                          key: 'workdays',
+                          width: 120,
+                          align: 'center' as const,
+                          render: (value: number) => (
+                            <Text strong style={{ color: '#3B82F6' }}>{value.toFixed(1)}</Text>
+                          ),
+                        },
+                        {
+                          title: '实际占比',
+                          dataIndex: 'actualRatio',
+                          key: 'actualRatio',
+                          width: 100,
+                          align: 'center' as const,
+                          render: (value: string) => (
+                            <Text style={{ color: '#0f172a', fontWeight: 500 }}>{value}%</Text>
+                          ),
+                        },
+                        {
+                          title: '合规区间',
+                          dataIndex: 'expectedRange',
+                          key: 'expectedRange',
+                          width: 120,
+                          align: 'center' as const,
+                          render: (value: string) => (
+                            <Text style={{ color: '#64748b' }}>{value}</Text>
+                          ),
+                        },
+                        {
+                          title: '占比分布',
+                          key: 'progress',
+                          width: 200,
+                          render: (_: any, record: any) => {
+                            const { progress, minPercent, maxPercent, isCompliant } = record
+                            return (
+                              <div style={{ position: 'relative' }}>
+                                <Progress
+                                  percent={progress}
+                                  size="small"
+                                  strokeColor={isCompliant ? '#10B981' : '#EF4444'}
+                                  trailColor="#E2E8F0"
+                                  format={() => ''}
+                                  style={{ marginBottom: 4 }}
+                                />
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#94A3B8' }}>
+                                  <span>{minPercent}%</span>
+                                  <span style={{ color: isCompliant ? '#10B981' : '#EF4444', fontWeight: 500 }}>
+                                    {progress.toFixed(1)}%
+                                  </span>
+                                  <span>{maxPercent}%</span>
+                                </div>
+                              </div>
+                            )
+                          },
+                        },
+                        {
+                          title: '合规结果',
+                          dataIndex: 'isCompliant',
+                          key: 'isCompliant',
+                          width: 100,
+                          align: 'center' as const,
+                          render: (value: boolean) => (
+                            value ? (
+                              <Tag
+                                icon={<CheckCircleOutlined />}
+                                style={{
+                                  borderRadius: 8,
+                                  background: '#10B981',
+                                  color: '#fff',
+                                  border: 'none',
+                                  fontWeight: 500,
+                                }}
+                              >
+                                通过
+                              </Tag>
+                            ) : (
+                              <Tag
+                                icon={<ExclamationCircleOutlined />}
+                                style={{
+                                  borderRadius: 8,
+                                  background: '#EF4444',
+                                  color: '#fff',
+                                  border: 'none',
+                                  fontWeight: 500,
+                                }}
+                              >
+                                超出
+                              </Tag>
+                            )
+                          ),
+                        },
+                      ]}
+                      summary={() => (
+                        <Table.Summary fixed>
+                          <Table.Summary.Row>
+                            <Table.Summary.Cell index={0} colSpan={5}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                {complianceChecks.every((c) => c.isCompliant) ? (
+                                  <CheckCircleOutlined style={{ color: '#10B981', fontSize: 18 }} />
+                                ) : (
+                                  <ExclamationCircleOutlined style={{ color: '#F59E0B', fontSize: 18 }} />
+                                )}
+                                <Text style={{ color: '#0f172a', fontWeight: 500 }}>
+                                  {complianceChecks.every((c) => c.isCompliant)
+                                    ? '✅ 全部合规：所有阶段占比均符合预期范围，成本分配合理'
+                                    : `⚠️ 存在异常：${complianceChecks.filter((c) => !c.isCompliant).length} 个阶段占比超出合规区间`}
+                                </Text>
+                              </div>
+                            </Table.Summary.Cell>
+                            <Table.Summary.Cell index={1}>
+                              {complianceChecks.every((c) => c.isCompliant) ? (
+                                <Tag style={{ borderRadius: 8, background: '#10B981', color: '#fff', border: 'none' }}>
+                                  全部通过
                                 </Tag>
                               ) : (
-                                <Tag
-                                  icon={<ExclamationCircleOutlined />}
-                                  style={{
-                                    borderRadius: 10,
-                                    background: '#EF4444',
-                                    color: '#fff',
-                                    border: 'none',
-                                  }}
-                                >
-                                  不合规
+                                <Tag style={{ borderRadius: 8, background: '#F59E0B', color: '#fff', border: 'none' }}>
+                                  需关注
                                 </Tag>
                               )}
-                            </div>
-                          </Card>
-                        </Col>
-                      ))}
-                    </Row>
-
-                    {/* 合规汇总 */}
-                    <Card
-                      style={{
-                        marginTop: 20,
-                        borderRadius: 14,
-                        background: complianceChecks.every((c) => c.isCompliant)
-                          ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(52, 211, 153, 0.08) 100%)'
-                          : 'linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, rgba(251, 191, 36, 0.08) 100%)',
-                        border: complianceChecks.every((c) => c.isCompliant)
-                          ? '1px solid rgba(16, 185, 129, 0.25)'
-                          : '1px solid rgba(245, 158, 11, 0.25)',
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                        {complianceChecks.every((c) => c.isCompliant) ? (
-                          <CheckCircleOutlined style={{ color: '#10B981', fontSize: 20 }} />
-                        ) : (
-                          <ExclamationCircleOutlined style={{ color: '#F59E0B', fontSize: 20 }} />
-                        )}
-                        <Text style={{ color: '#0f172a' }}>
-                          {complianceChecks.every((c) => c.isCompliant)
-                            ? '所有阶段占比均符合预期范围，成本分配合理'
-                            : `存在 ${complianceChecks.filter((c) => !c.isCompliant).length} 个阶段占比不合规，请检查计算参数`}
-                        </Text>
-                      </div>
-                    </Card>
+                            </Table.Summary.Cell>
+                          </Table.Summary.Row>
+                        </Table.Summary>
+                      )}
+                    />
                   </Card>
 
                   {/* 计算轨迹展示 */}
@@ -1026,11 +1361,11 @@ export default function CostEstimateResult() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Button
             size="large"
-            onClick={() => navigate(`/cost-estimate/parse-result?projectId=${projectId}`)}
+            onClick={() => navigate('/cost-estimate/result')}
             style={{ borderRadius: 14, height: 48 }}
           >
             <ArrowLeftOutlined style={{ marginRight: 8 }} />
-            上一步：解析结果
+            返回列表
           </Button>
           <Space>
             <Tooltip title="重新计算成本预估">

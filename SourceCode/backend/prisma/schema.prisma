@@ -51,21 +51,29 @@ model ParamTemplate {
 }
 
 model Project {
-  id              Int               @id @default(autoincrement())
-  userId          Int               @map("user_id")
-  projectName     String            @map("project_name")
-  projectType     String?           @map("project_type")
-  contractAmount  Float?            @map("contract_amount")
-  status          String            @default("ongoing")
-  createdAt       DateTime          @default(now()) @map("created_at")
-  updatedAt       DateTime          @updatedAt @map("updated_at")
-  deviations      CostDeviation[]
-  estimateConfigs EstimateConfig[]
-  estimateResults EstimateResult[]
-  costs           ProjectCost[]
-  documents       ProjectDocument[]
-  members         ProjectMember[]
-  user            User              @relation(fields: [userId], references: [id])
+  id                    Int               @id @default(autoincrement())
+  userId                Int               @map("user_id")
+  projectCode           String?           @unique @map("project_code")  // 项目编号（业务主键）
+  projectName           String            @map("project_name")
+  projectType           String?           @map("project_type")
+  contractAmount        Float?            @map("contract_amount")
+  preSaleRatio          Float             @default(0) @map("pre_sale_ratio")  // 售前比例
+  taxRate               Float             @default(0.06) @map("tax_rate")  // 税率
+  externalLaborCost     Float             @default(0) @map("external_labor_cost")  // 外采人力成本
+  externalSoftwareCost  Float             @default(0) @map("external_software_cost")  // 外采软件成本
+  otherCost             Float             @default(0) @map("other_cost")  // 其它成本
+  currentManpowerCost   Float             @default(0) @map("current_manpower_cost")  // 当前人力成本
+  devopsProgress        Float             @default(0) @map("devops_progress")  // DevOps项目进度
+  status                String            @default("ongoing")
+  createdAt             DateTime          @default(now()) @map("created_at")
+  updatedAt             DateTime          @updatedAt @map("updated_at")
+  deviations            CostDeviation[]
+  estimateConfigs       EstimateConfig[]
+  estimateResults       EstimateResult[]
+  costs                 ProjectCost[]
+  documents             ProjectDocument[]
+  members               ProjectMember[]
+  user                  User              @relation(fields: [userId], references: [id])
 
   @@map("projects")
 }
@@ -120,11 +128,13 @@ model ProjectMember {
   id            Int       @id @default(autoincrement())
   projectId     Int       @map("project_id")
   name          String
+  department    String?   @map("department")  // 部门
   level         String
   dailyCost     Float     @map("daily_cost")
   role          String?
   entryTime     DateTime? @map("entry_time")
   leaveTime     DateTime? @map("leave_time")
+  isToEnd       Boolean   @default(false) @map("is_to_end")  // 是否至结项
   reportedHours Float?    @map("reported_hours")
   createdAt     DateTime  @default(now()) @map("created_at")
   project       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -140,6 +150,7 @@ model ProjectCost {
   taxRate              Float     @default(0.06) @map("tax_rate")
   externalLaborCost    Float     @default(0) @map("external_labor_cost")
   externalSoftwareCost Float     @default(0) @map("external_software_cost")
+  otherCost            Float     @default(0) @map("other_cost")  // 其它成本
   currentManpowerCost  Float     @default(0) @map("current_manpower_cost")
   availableCost        Float     @default(0) @map("available_cost")
   dailyManpowerCost    Float     @default(0) @map("daily_manpower_cost")
@@ -156,8 +167,10 @@ model ProjectCost {
 model CostDeviation {
   id                     Int      @id @default(autoincrement())
   projectId              Int      @map("project_id")
+  projectName            String?  @map("project_name")  // 项目名称
   totalContractAmount    Float    @map("total_contract_amount")
   currentCostConsumption Float    @default(0) @map("current_cost_consumption")
+  devopsProgress         Float    @default(0) @map("devops_progress")  // DevOps进度
   taskProgress           Float    @default(0) @map("task_progress")
   costDeviation          Float    @default(0) @map("cost_deviation")
   baselineType           String   @default("default") @map("baseline_type")

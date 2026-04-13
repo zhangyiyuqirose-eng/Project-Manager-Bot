@@ -9,6 +9,7 @@ import {
   message,
   Form,
   InputNumber,
+  Input,
   Table,
   Select,
   DatePicker,
@@ -16,6 +17,7 @@ import {
   Col,
   Tag,
   Tooltip,
+  Checkbox,
 } from 'antd'
 import {
   InboxOutlined,
@@ -29,6 +31,8 @@ import {
   ArrowRightOutlined,
   InfoCircleOutlined,
   CheckCircleOutlined,
+  SearchOutlined,
+  SaveOutlined,
 } from '@ant-design/icons'
 import type { UploadProps, UploadFile } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
@@ -64,11 +68,14 @@ const levelOptions: { value: MemberLevel; label: string }[] = [
 
 interface MemberFormData {
   key: string
+  memberId?: number
   name: string
+  department?: string
   level: MemberLevel
   dailyCost: number
   entryTime: string | null
   leaveTime: string | null
+  isToEnd: boolean
 }
 
 export default function CostConsumptionInput() {
@@ -81,6 +88,11 @@ export default function CostConsumptionInput() {
   const [ocrLoading, setOcrLoading] = useState(false)
   const [ocrSuccess, setOcrSuccess] = useState(false)
 
+  // 项目编号查询相关状态
+  const [projectCode, setProjectCode] = useState('')
+  const [querying, setQuerying] = useState(false)
+  const [actualProjectId, setActualProjectId] = useState<number | null>(null)
+
   // OCR识别结果表单
   const [form] = Form.useForm()
 
@@ -90,6 +102,86 @@ export default function CostConsumptionInput() {
 
   // 生成唯一key
   const generateKey = () => `member_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+
+  // 根据项目编号查询项目信息
+  const handleQueryByProjectCode = async () => {
+    if (!projectCode) {
+      message.warning('请输入项目编号')
+      return
+    }
+
+    setQuerying(true)
+    try {
+      const response = await consumptionApi.queryByProjectCode(projectCode)
+      if (response.data.code === 0 || response.data.code === 200) {
+        const data = response.data.data
+        // 反显项目信息
+        form.setFieldsValue({
+          contractAmount: data.contractAmount || 0,
+          preSaleRatio: data.preSaleRatio || 0,
+          taxRate: data.taxRate || 0.06,
+          externalLaborCost: data.externalLaborCost || 0,
+          externalSoftwareCost: data.externalSoftwareCost || 0,
+          otherCost: data.otherCost || 0,
+          currentManpowerCost: data.currentManpowerCost || 0,
+        })
+        // 反显人员列表
+        if (data.members && data.members.length > 0) {
+          setMembers(data.members.map((m: any, index: number) => ({
+            key: `member_${index}_${Date.now()}`,
+            memberId: m.memberId,
+            name: m.name || '',
+            department: m.department || '',
+            level: m.level || 'P5',
+            dailyCost: m.dailyCost || MEMBER_LEVEL_DAILY_COST['P5'],
+            entryTime: m.entryTime || null,
+            leaveTime: m.leaveTime || null,
+            isToEnd: m.isToEnd || false,
+          })))
+        }
+        setActualProjectId(data.projectId)
+        message.success('项目信息已加载')
+      }
+    } catch (err: any) {
+      const errorMsg = err?.response?.data?.message || '查询项目失败'
+      message.error(errorMsg)
+    } finally {
+      setQuerying(false)
+    }
+  }
+
+  // 保存项目人员信息
+  const handleSaveMembers = async () => {
+    const pid = actualProjectId || projectId
+    if (!pid) {
+      message.warning('请先通过项目编号查询项目或上传OA截图')
+      return
+    }
+
+    const validMembers = members.filter(m => m.name && m.level)
+    if (validMembers.length === 0) {
+      message.warning('请至少添加一名有效成员')
+      return
+    }
+
+    setSaving(true)
+    try {
+      await consumptionApi.saveMembers(Number(pid), validMembers.map(m => ({
+        name: m.name,
+        department: m.department,
+        level: m.level,
+        dailyCost: m.dailyCost,
+        entryTime: m.entryTime,
+        leaveTime: m.isToEnd ? null : m.leaveTime,
+        isToEnd: m.isToEnd,
+      })))
+      message.success('人员信息保存成功')
+    } catch {
+      message.error('人员信息保存失败')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   // 图片上传前的校验
   const beforeUpload = (file: File) => {
@@ -182,10 +274,31 @@ export default function CostConsumptionInput() {
       key: 'name',
       width: 120,
       render: (value: string, record) => (
-        <InputNumber
+        <Input
           value={value}
-          onChange={(v) => handleMemberChange(record.key, 'name', v)}
+          onChange={(e) => {
+            const val = e.target.value
+            // 允许中文、"."、字母、数字，最多10个字符（支持少数民族姓名中的中文"."）
+            if (/^[\u4e00-\u9fa5.a-zA-Z0-9]{0,10}$/.test(val) || val === '') {
+              handleMemberChange(record.key, 'name', val)
+            }
+          }}
           placeholder="请输入姓名"
+          maxLength={10}
+          style={{ width: '100%', borderRadius: 8 }}
+        />
+      ),
+    },
+    {
+      title: '部门',
+      dataIndex: 'department',
+      key: 'department',
+      width: 120,
+      render: (value: string, record) => (
+        <Input
+          value={value || ''}
+          onChange={(e) => handleMemberChange(record.key, 'department', e.target.value)}
+          placeholder="请输入部门"
           style={{ width: '100%', borderRadius: 8 }}
         />
       ),
@@ -244,16 +357,26 @@ export default function CostConsumptionInput() {
       title: '离项时间',
       dataIndex: 'leaveTime',
       key: 'leaveTime',
-      width: 150,
+      width: 200,
       render: (value: string | null, record) => (
-        <DatePicker
-          value={value ? dayjs(value) : null}
-          onChange={(date) =>
-            handleMemberChange(record.key, 'leaveTime', date ? date.format('YYYY-MM-DD') : null)
-          }
-          style={{ width: '100%', borderRadius: 8 }}
-          placeholder="选择日期"
-        />
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <Checkbox
+            checked={record.isToEnd}
+            onChange={(e) => handleMemberChange(record.key, 'isToEnd', e.target.checked)}
+          >
+            至结项
+          </Checkbox>
+          {!record.isToEnd && (
+            <DatePicker
+              value={value ? dayjs(value) : null}
+              onChange={(date) =>
+                handleMemberChange(record.key, 'leaveTime', date ? date.format('YYYY-MM-DD') : null)
+              }
+              style={{ width: 130, borderRadius: 8 }}
+              placeholder="选择日期"
+            />
+          )}
+        </div>
       ),
     },
     {
@@ -275,7 +398,7 @@ export default function CostConsumptionInput() {
   const handleMemberChange = (
     key: string,
     field: keyof MemberFormData,
-    value: string | number | null
+    value: string | number | boolean | null
   ) => {
     setMembers((prev) =>
       prev.map((m) => (m.key === key ? { ...m, [field]: value } : m))
@@ -297,10 +420,12 @@ export default function CostConsumptionInput() {
     const newMember: MemberFormData = {
       key: generateKey(),
       name: '',
+      department: '',
       level: 'P5' as MemberLevel,
       dailyCost: MEMBER_LEVEL_DAILY_COST['P5'],
       entryTime: null,
       leaveTime: null,
+      isToEnd: false,
     }
     setMembers((prev) => [...prev, newMember])
   }
@@ -313,14 +438,40 @@ export default function CostConsumptionInput() {
   // 开始核算
   const handleCalculate = async () => {
     try {
-      // 验证表单
+      // 验证表单（包含所有必填项）
       const formValues = await form.validateFields()
+
+      // 验证合同金额大于0
+      if (!formValues.contractAmount || formValues.contractAmount <= 0) {
+        message.error('合同金额必须大于0')
+        return
+      }
+
+      // 验证售前比例范围
+      if (formValues.preSaleRatio < 0 || formValues.preSaleRatio > 1) {
+        message.error('售前比例必须在0-1之间')
+        return
+      }
+
+      // 验证税率范围
+      if (formValues.taxRate < 0 || formValues.taxRate > 1) {
+        message.error('税率必须在0-1之间')
+        return
+      }
 
       // 验证成员数据
       const validMembers = members.filter((m) => m.name && m.level)
       if (validMembers.length === 0) {
         message.warning('请至少添加一名有效成员')
         return
+      }
+
+      // 验证每个成员的姓名不能为空
+      for (const member of validMembers) {
+        if (!member.name || member.name.trim() === '') {
+          message.error('成员姓名不能为空')
+          return
+        }
       }
 
       setSaving(true)
@@ -332,27 +483,37 @@ export default function CostConsumptionInput() {
         taxRate: formValues.taxRate,
         externalLaborCost: formValues.externalLaborCost,
         externalSoftwareCost: formValues.externalSoftwareCost,
+        otherCost: formValues.otherCost || 0,
         currentManpowerCost: formValues.currentManpowerCost,
         teamMembers: validMembers.map((m) => ({
           name: m.name,
+          department: m.department,
           level: m.level,
           dailyCost: m.dailyCost,
           entryTime: m.entryTime,
-          leaveTime: m.leaveTime,
+          leaveTime: m.isToEnd ? null : m.leaveTime,
+          isToEnd: m.isToEnd,
         })),
       }
 
+      // 使用查询到的项目ID或URL中的项目ID
+      const pid = actualProjectId || projectId
+      if (!pid) {
+        message.warning('请先通过项目编号查询项目或上传OA截图')
+        setSaving(false)
+        return
+      }
+
       // 调用保存接口
-      const actualProjectId = projectId || 'new'
-      await consumptionApi.saveProjectInfo(Number(actualProjectId), submitData)
+      await consumptionApi.saveProjectInfo(Number(pid), submitData)
 
       // 调用计算接口
-      const calcResponse = await consumptionApi.calculateCost(Number(actualProjectId))
+      const calcResponse = await consumptionApi.calculateCost(Number(pid))
 
       if (calcResponse.data.code === 0 || calcResponse.data.code === 200) {
         message.success('核算完成')
         setCurrentStep(1)
-        navigate(`/cost-consumption/result?projectId=${actualProjectId}`)
+        navigate(`/cost-consumption/result?projectId=${pid}`)
       }
     } catch {
       message.error('核算失败，请检查数据')
@@ -373,42 +534,6 @@ export default function CostConsumptionInput() {
       >
         <Steps current={currentStep} items={stepItems} />
       </Card>
-
-      {/* 功能介绍区域 */}
-      <div
-        style={{
-          background: 'linear-gradient(135deg, #10B981 0%, #34D399 100%)',
-          borderRadius: 24,
-          padding: '48px 48px',
-          marginBottom: 32,
-          position: 'relative',
-          overflow: 'hidden',
-        }}
-      >
-        <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: 28 }}>
-          <div
-            style={{
-              width: 68,
-              height: 68,
-              borderRadius: 18,
-              background: 'rgba(255, 255, 255, 0.18)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <DollarOutlined style={{ fontSize: 32, color: '#fff' }} />
-          </div>
-          <div>
-            <Title level={3} style={{ color: '#fff', margin: 0, marginBottom: 10 }}>
-              成本消耗预估
-            </Title>
-            <Text style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: 15, lineHeight: 1.6 }}>
-              上传OA截图智能识别，实时追踪成本消耗，预测燃尽时间
-            </Text>
-          </div>
-        </div>
-      </div>
 
       {/* OA截图上传区域 */}
       <Card
@@ -493,6 +618,54 @@ export default function CostConsumptionInput() {
         )}
       </Card>
 
+      {/* 项目编号查询区域 */}
+      <Card
+        style={{
+          borderRadius: 24,
+          marginBottom: 32,
+          border: '1px solid var(--color-border-light)',
+        }}
+      >
+        <div style={{ marginBottom: 24 }}>
+          <Title level={4} style={{ marginBottom: 8, fontWeight: 600 }}>
+            <SearchOutlined style={{ marginRight: 10, color: '#8B5CF6' }} />
+            项目编号查询
+          </Title>
+          <Text type="secondary" style={{ fontSize: 14 }}>输入项目编号查询已保存的项目信息和人员列表</Text>
+        </div>
+
+        <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+          <Input
+            value={projectCode}
+            onChange={(e) => setProjectCode(e.target.value)}
+            onBlur={() => {
+              if (projectCode.trim()) {
+                handleQueryByProjectCode()
+              }
+            }}
+            placeholder="请输入项目编号"
+            style={{ flex: 1, maxWidth: 400, borderRadius: 10, height: 42 }}
+            onPressEnter={handleQueryByProjectCode}
+          />
+          <Button
+            type="primary"
+            size="large"
+            onClick={handleQueryByProjectCode}
+            loading={querying}
+            style={{
+              borderRadius: 10,
+              height: 42,
+              background: 'linear-gradient(135deg, #8B5CF6 0%, #A78BFA 100%)',
+              border: 'none',
+              fontWeight: 600,
+            }}
+          >
+            <SearchOutlined style={{ marginRight: 8 }} />
+            查询
+          </Button>
+        </div>
+      </Card>
+
       {/* OCR识别结果展示表单 */}
       <Card
         style={{
@@ -506,15 +679,16 @@ export default function CostConsumptionInput() {
             <DollarOutlined style={{ marginRight: 10, color: '#3B82F6' }} />
             项目信息
           </Title>
-          <Text type="secondary" style={{ fontSize: 14 }}>请核对OCR识别结果或手动输入项目财务数据</Text>
+          <Text type="secondary" style={{ fontSize: 14 }}>请核对OCR识别结果或手动输入项目财务数据（带*为必填项）</Text>
         </div>
 
         <Form form={form} layout="vertical" initialValues={{
           contractAmount: 0,
           preSaleRatio: 0,
-          taxRate: 0,
+          taxRate: 0.06,
           externalLaborCost: 0,
           externalSoftwareCost: 0,
+          otherCost: 0,
           currentManpowerCost: 0,
         }}>
           <Row gutter={28}>
@@ -522,7 +696,7 @@ export default function CostConsumptionInput() {
               <Form.Item
                 label={
                   <span>
-                    合同金额(万元)
+                    合同金额(万元) *
                     <Tooltip title="项目合同总金额">
                       <InfoCircleOutlined style={{ color: '#64748b', marginLeft: 6 }} />
                     </Tooltip>
@@ -543,7 +717,7 @@ export default function CostConsumptionInput() {
               <Form.Item
                 label={
                   <span>
-                    售前比例
+                    售前比例 *
                     <Tooltip title="售前成本占总合同的比例，如 0.15 表示 15%">
                       <InfoCircleOutlined style={{ color: '#64748b', marginLeft: 6 }} />
                     </Tooltip>
@@ -565,7 +739,7 @@ export default function CostConsumptionInput() {
               <Form.Item
                 label={
                   <span>
-                    税率
+                    税率 *
                     <Tooltip title="项目税率，如 0.06 表示 6%">
                       <InfoCircleOutlined style={{ color: '#64748b', marginLeft: 6 }} />
                     </Tooltip>
@@ -587,13 +761,14 @@ export default function CostConsumptionInput() {
               <Form.Item
                 label={
                   <span>
-                    外采人力成本(万元)
+                    外采人力成本(万元) *
                     <Tooltip title="外包人力成本">
                       <InfoCircleOutlined style={{ color: '#64748b', marginLeft: 6 }} />
                     </Tooltip>
                   </span>
                 }
                 name="externalLaborCost"
+                rules={[{ required: true, message: '请输入外采人力成本' }]}
               >
                 <InputNumber
                   min={0}
@@ -607,13 +782,14 @@ export default function CostConsumptionInput() {
               <Form.Item
                 label={
                   <span>
-                    外采软件成本(万元)
+                    外采软件成本(万元) *
                     <Tooltip title="外包软件采购成本">
                       <InfoCircleOutlined style={{ color: '#64748b', marginLeft: 6 }} />
                     </Tooltip>
                   </span>
                 }
                 name="externalSoftwareCost"
+                rules={[{ required: true, message: '请输入外采软件成本' }]}
               >
                 <InputNumber
                   min={0}
@@ -627,13 +803,35 @@ export default function CostConsumptionInput() {
               <Form.Item
                 label={
                   <span>
-                    当前人力成本(万元)
+                    其它成本(万元) *
+                    <Tooltip title="其它类型成本支出">
+                      <InfoCircleOutlined style={{ color: '#64748b', marginLeft: 6 }} />
+                    </Tooltip>
+                  </span>
+                }
+                name="otherCost"
+                rules={[{ required: true, message: '请输入其它成本' }]}
+              >
+                <InputNumber
+                  min={0}
+                  precision={2}
+                  style={{ width: '100%', borderRadius: 10 }}
+                  placeholder="请输入其它成本"
+                />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12} md={8}>
+              <Form.Item
+                label={
+                  <span>
+                    当前人力成本(万元) *
                     <Tooltip title="已消耗的人力成本">
                       <InfoCircleOutlined style={{ color: '#64748b', marginLeft: 6 }} />
                     </Tooltip>
                   </span>
                 }
                 name="currentManpowerCost"
+                rules={[{ required: true, message: '请输入当前人力成本' }]}
               >
                 <InputNumber
                   min={0}
@@ -717,6 +915,25 @@ export default function CostConsumptionInput() {
         >
           新增成员
         </Button>
+
+        {/* 保存项目人员按钮 */}
+        <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end' }}>
+          <Button
+            type="primary"
+            icon={<SaveOutlined />}
+            onClick={handleSaveMembers}
+            loading={saving}
+            style={{
+              borderRadius: 14,
+              height: 48,
+              background: 'linear-gradient(135deg, #3B82F6 0%, #8B5CF6 100%)',
+              border: 'none',
+              fontWeight: 600,
+            }}
+          >
+            保存项目人员
+          </Button>
+        </div>
       </Card>
 
       {/* 操作按钮 */}
@@ -734,22 +951,33 @@ export default function CostConsumptionInput() {
           >
             返回首页
           </Button>
-          <Button
-            type="primary"
-            size="large"
-            onClick={handleCalculate}
-            loading={saving}
-            style={{
-              borderRadius: 14,
-              height: 48,
-              background: 'linear-gradient(135deg, #10B981 0%, #34D399 100%)',
-              border: 'none',
-              fontWeight: 600,
-            }}
-          >
-            开始核算
-            <ArrowRightOutlined style={{ marginLeft: 10 }} />
-          </Button>
+          <div style={{ display: 'flex', gap: 16 }}>
+            <Button
+              size="large"
+              icon={<SaveOutlined />}
+              onClick={handleSaveMembers}
+              loading={saving}
+              style={{ borderRadius: 14, height: 48 }}
+            >
+              保存人员
+            </Button>
+            <Button
+              type="primary"
+              size="large"
+              onClick={handleCalculate}
+              loading={saving}
+              style={{
+                borderRadius: 14,
+                height: 48,
+                background: 'linear-gradient(135deg, #10B981 0%, #34D399 100%)',
+                border: 'none',
+                fontWeight: 600,
+              }}
+            >
+              开始核算
+              <ArrowRightOutlined style={{ marginLeft: 10 }} />
+            </Button>
+          </div>
         </div>
       </Card>
     </div>

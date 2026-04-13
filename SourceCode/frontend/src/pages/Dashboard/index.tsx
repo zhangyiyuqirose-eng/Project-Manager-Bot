@@ -175,7 +175,7 @@ export default function Dashboard() {
       >
         <div style={{ position: 'relative', zIndex: 1 }}>
           <Title level={1} style={{ color: '#fff', margin: 0, marginBottom: 16, fontWeight: 700, fontSize: 36 }}>
-            数字员工系统
+            IT项目智能成本管控平台
           </Title>
           <Text style={{ color: 'rgba(255, 255, 255, 0.7)', fontSize: 18, display: 'block', marginBottom: 32, lineHeight: 1.6 }}>
             智能估算 · 精准管控 · 让每一分项目成本清晰可见

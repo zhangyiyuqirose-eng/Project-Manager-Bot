@@ -70,6 +70,47 @@ export interface UnitPrice {
   price: number
 }
 
+// 功能点信息（参考后端 FunctionInfo）
+export interface FunctionInfo {
+  name: string
+  complexity: 'very_basic' | 'basic' | 'medium' | 'complex' | 'very_complex'
+  association_systems?: number
+  association_coeff?: number
+}
+
+// 功能点计算轨迹（参考后端 FunctionTrace）
+export interface FunctionTrace {
+  module: string
+  function: string
+  complexity: string
+  base: number
+  assoc: number
+  assoc_systems: number
+  tech_stack: number
+  mgmt: number
+  phases: Record<string, {
+    flow_coeff: number
+    uses_tech_stack: boolean
+    raw: number
+    workload: number
+  }>
+}
+
+// 合规校验详情
+export interface ComplianceDetail {
+  pass: boolean
+  days: number
+  pct: number
+  min: number
+  max: number
+}
+
+// 合规校验结果
+export interface ComplianceResult {
+  all_pass: boolean
+  details: Record<string, ComplianceDetail>
+}
+
 export interface EstimateResult {
   projectId: number
   totalManDay: number
@@ -79,6 +120,9 @@ export interface EstimateResult {
   stageBreakdown: StageBreakdown[]
   teamBreakdown: TeamBreakdown[]
   calculationTrace: CalculationTrace[]
+  traces?: FunctionTrace[]        // 新增：详细功能点计算轨迹
+  compliance?: ComplianceResult   // 新增：合规校验结果
+  totalItems?: number             // 新增：功能点总数
 }
 
 export interface StageBreakdown {
@@ -110,11 +154,13 @@ export interface CalculationTrace {
 // 成本消耗预估相关类型
 export interface CostConsumption {
   projectId: number
+  projectCode?: string
   contractAmount: number
   preSaleRatio: number
   taxRate: number
   externalLaborCost: number
   externalSoftwareCost: number
+  otherCost: number
   currentManpowerCost: number
   teamMembers: TeamMember[]
   availableCost: number
@@ -124,12 +170,14 @@ export interface CostConsumption {
 }
 
 export interface TeamMember {
-  memberId: number
+  memberId?: number
   name: string
+  department?: string
   level: MemberLevel
   dailyCost: number
   entryTime?: string
   leaveTime?: string
+  isToEnd?: boolean
   reportedHours?: number
 }
 
@@ -146,8 +194,10 @@ export const MEMBER_LEVEL_DAILY_COST: Record<MemberLevel, number> = {
 // 成本偏差监控相关类型
 export interface CostDeviation {
   projectId: number
+  projectName?: string
   totalContractAmount: number
   currentCostConsumption: number
+  devopsProgress?: number
   taskProgress: number
   costDeviation: number
   expectedStages: StageCost[]
