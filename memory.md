@@ -1,0 +1,4 @@
+﻿-Build script requires Node 20+, user's machine has 18. Use nvm first.
+-Port 3000 is taken. Use 3001 for dev server.
+-Playwright tests fail if Chrome is already open.
+-User prefers pnpm over npm.
