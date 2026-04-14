@@ -1,14 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-
-// 用户信息类型
-interface User {
-  userId: number
-  username: string
-  name: string
-  role: 'pm' | 'supervisor' | 'department_head' | 'finance'
-  permissions: string[]
-}
+import type { User, UserRole, Project } from '../types'
 
 // 用户状态
 interface UserState {
@@ -33,8 +25,9 @@ export const useUserStore = create<UserState>()(
         userId: 1,
         username: 'admin',
         name: '管理员',
-        role: 'pm',
+        role: 'pm' as UserRole,
         permissions: ['*'],
+        createdAt: new Date().toISOString(),
       },
       token: 'default-token',
       isAuthenticated: true,
@@ -75,15 +68,7 @@ export const useUserStore = create<UserState>()(
   )
 )
 
-// 项目状态
-interface Project {
-  projectId: number
-  projectName: string
-  status: 'ongoing' | 'completed' | 'paused'
-  createdAt: string
-  updatedAt: string
-}
-
+// 项目状态（使用导入的 Project 类型）
 interface ProjectState {
   currentProject: Project | null
   projects: Project[]

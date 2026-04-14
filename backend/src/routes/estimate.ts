@@ -8,24 +8,9 @@ import ExcelJS from 'exceljs'
 import prisma from '../config/database'
 import { authMiddleware } from '../middlewares/auth'
 import aiService from '../services/aiService'
-
-/**
- * 修复中文文件名乱码问题
- * multer 接收的 file.originalname 可能是 latin1 编码，需要转换为 utf8
- */
-function decodeFilename(filename: string): string {
-  try {
-    // 尝试从 latin1 转换为 utf8
-    const decoded = Buffer.from(filename, 'latin1').toString('utf8')
-    // 如果解码后包含乱码特征（如  或 ），则返回原文件名
-    if (decoded.includes('') || decoded.includes('')) {
-      return filename
-    }
-    return decoded
-  } catch {
-    return filename
-  }
-}
+import { decodeFilename, ensureUploadDir, generateUniqueFilename } from '../utils/file'
+import { sendSuccess as sendResponse, sendError } from '../utils/response'
+import { verifyProjectOwnership } from '../utils/project'
 import {
   ApiResponse,
   UploadDocumentResponse,
@@ -142,33 +127,7 @@ const COMPLIANCE_RANGES: Record<string, [number, number]> = {
   '投产上线': [2, 2]
 }
 
-// ==================== 辅助函数 ====================
-
-const sendResponse = <T>(res: Response, data: T, message = '操作成功'): void => {
-  res.json({
-    code: 200,
-    message,
-    data
-  })
-}
-
-const sendError = (res: Response, code: number, message: string): void => {
-  res.status(code).json({
-    code,
-    message,
-    data: null
-  })
-}
-
-/**
- * 验证项目归属
- */
-const verifyProjectOwnership = async (projectId: number, userId: number): Promise<boolean> => {
-  const project = await prisma.project.findFirst({
-    where: { id: projectId, userId }
-  })
-  return project !== null
-}
+// ==================== 路由处理 ====================
 
 /**
  * 解析 DOC/DOCX 文档内容

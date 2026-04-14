@@ -35,6 +35,7 @@ model OperationLog {
   createdAt        DateTime @default(now()) @map("created_at")
   user             User     @relation(fields: [userId], references: [id])
 
+  @@index([userId, createdAt])  // 高频查询：用户的操作日志（按时间排序）
   @@map("operation_logs")
 }
 
@@ -75,6 +76,8 @@ model Project {
   members               ProjectMember[]
   user                  User              @relation(fields: [userId], references: [id])
 
+  @@index([userId, status])  // 高频查询：用户的项目列表（按状态过滤）
+  @@index([updatedAt])       // 排序索引：按更新时间排序
   @@map("projects")
 }
 
@@ -89,6 +92,7 @@ model ProjectDocument {
   createdAt   DateTime @default(now()) @map("created_at")
   project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
+  @@index([projectId, parseStatus])  // 高频查询：获取项目的已解析文档
   @@map("project_documents")
 }
 
@@ -121,6 +125,7 @@ model EstimateResult {
   createdAt   DateTime @default(now()) @map("created_at")
   project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
+  @@index([projectId])  // 高频查询：获取项目的预估结果
   @@map("estimate_results")
 }
 
@@ -139,6 +144,7 @@ model ProjectMember {
   createdAt     DateTime  @default(now()) @map("created_at")
   project       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
+  @@index([projectId])  // 高频查询：获取项目成员列表
   @@map("project_members")
 }
 
@@ -183,5 +189,7 @@ model CostDeviation {
   updatedAt              DateTime @updatedAt @map("updated_at")
   project                Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
+  @@index([projectId])  // 高频查询：获取项目的偏差记录
+  @@index([createdAt])  // 排序索引：按创建时间排序
   @@map("cost_deviations")
 }

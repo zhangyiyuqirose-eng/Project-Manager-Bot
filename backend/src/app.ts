@@ -10,6 +10,7 @@ import consumptionRoutes from './routes/consumption'
 import deviationRoutes from './routes/deviation'
 import { errorHandler } from './middlewares/errorHandler'
 import { requestLogger } from './middlewares/logger'
+import { authLimiter, apiLimiter, aiLimiter } from './middlewares/rateLimit'
 
 const app = express()
 
@@ -30,6 +31,17 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')))
 
 // 请求日志
 app.use(requestLogger)
+
+// API 通用限流
+app.use('/api', apiLimiter)
+
+// 认证端点严格限流（防止暴力破解）
+app.use('/api/auth/login', authLimiter)
+
+// AI 端点宽松限流（AI调用耗时较长）
+app.use('/api/estimate', aiLimiter)
+app.use('/api/consumption', aiLimiter)
+app.use('/api/deviation', aiLimiter)
 
 // API路由
 app.use('/api/auth', authRoutes)

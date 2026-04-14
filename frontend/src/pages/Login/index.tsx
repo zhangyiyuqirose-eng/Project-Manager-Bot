@@ -21,6 +21,7 @@ interface LoginResponse {
     name: string
     role: 'pm' | 'supervisor' | 'department_head' | 'finance'
     permissions: string[]
+    createdAt: string
   }
 }
 

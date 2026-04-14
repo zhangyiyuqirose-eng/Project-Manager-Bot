@@ -107,6 +107,27 @@ class AIService {
     // Mock模式：仅当显式设置AI_MOCK=true时启用（默认禁用，真实调用）
     this.enableMock = process.env.AI_MOCK === 'true'
 
+    // 环境变量校验：生产环境应配置API密钥
+    const warnings: string[] = []
+
+    if (!process.env.AI_API_URL) {
+      warnings.push('AI_API_URL 未配置，使用默认值')
+    }
+    if (!process.env.AI_API_KEY && !this.enableMock) {
+      warnings.push('AI_API_KEY 未配置，AI文本服务将无法正常工作')
+    }
+    if (!process.env.AI_MODEL) {
+      warnings.push('AI_MODEL 未配置，使用默认模型 MiniMax-M2.5')
+    }
+
+    // 输出配置警告
+    if (warnings.length > 0) {
+      console.warn('[AI Service] ⚠️ 配置警告:')
+      warnings.forEach(w => console.warn(`  - ${w}`))
+      console.warn('[AI Service] 建议在 .env 文件中配置完整的环境变量')
+      console.warn('[AI Service] 或设置 AI_MOCK=true 启用模拟模式')
+    }
+
     console.log(`[AI Service] 文本推理模型: ${this.model}, OCR服务: ${this.ocrProvider}, Mock模式: ${this.enableMock}`)
   }
 
