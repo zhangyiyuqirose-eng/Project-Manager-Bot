@@ -27,7 +27,7 @@ IT项目智能成本管控平台 (IT Project Intelligent Cost Management Platfor
 - JWT authentication (currently bypassed in frontend)
 - Winston for logging
 - Multer for file uploads
-- External AI API integration (kimi-k2.5 model for document parsing, PaddleOCR/EasyOCR for OCR)
+- External AI API integration (MiniMax-M2.5 model for document parsing via Finna API, EasyOCR for OCR)
 
 ### OCRService Stack
 - FastAPI + Uvicorn server (Python 3.10+)
@@ -59,6 +59,8 @@ npm run build        # Type-check + build for production
 npm run lint         # Run ESLint
 npm run preview      # Preview production build
 ```
+
+**Path Alias**: `@` maps to `frontend/src/` (configured in vite.config.ts)
 
 ### OCRService
 ```bash
@@ -99,9 +101,18 @@ interface ApiResponse<T> {
 - `aiApi` - AI operations (180s timeout for document parsing, OCR, calculations)
 
 ### State Management
-- `useUserStore` - User authentication state (persisted in localStorage)
+- `useUserStore` - User authentication state (persisted in localStorage, currently defaults to logged-in)
 - `useProjectStore` - Current project and project list
 - `useGlobalStore` - Loading state overlay
+
+**Frontend Source Structure** (`frontend/src/`):
+- `main.tsx` - Entry point
+- `App.tsx` - React Router configuration
+- `api/index.ts` - Axios instances (`api` for standard requests, `aiApi` for AI operations) and API methods
+- `store/userStore.ts` - Zustand stores (user, project, global)
+- `types/index.ts` - TypeScript type definitions
+- `components/common/` - Shared components (Layout, PageHeader, EstimateSteps, etc.)
+- `pages/` - Route page components organized by module
 
 ### OCRService API Endpoints (port 8868)
 - `GET /health` - Health check (returns engine_ready status)
@@ -125,13 +136,39 @@ Routes are mounted under `/api/`:
 - `/api/consumption` - Cost consumption estimation
 - `/api/deviation` - Cost deviation monitoring
 
+**Backend Source Structure** (`backend/src/`):
+- `server.ts` - Entry point
+- `app.ts` - Express app configuration
+- `routes/` - API route handlers (auth, projects, estimate, consumption, deviation, dashboard)
+- `middlewares/` - Auth, error handler, logger
+- `services/aiService.ts` - AI integration (document parsing, OCR, deviation analysis)
+- `config/database.ts` - Prisma client configuration
+- `types/index.ts` - TypeScript type definitions
+
 ### Frontend Routing
-Five-step cost estimate workflow:
+**实施成本预估** (Cost Estimate - 5-step workflow):
 1. `/cost-estimate/upload` - Document upload
 2. `/cost-estimate/project-info` - Project information
 3. `/cost-estimate/ai-analysis` - AI parsing results
 4. `/cost-estimate/config` - Configuration parameters
 5. `/cost-estimate/result` - Calculation results
+
+**成本消耗预估** (Cost Consumption - 2-step workflow):
+- `/cost-consumption/input` - OCR upload and project info
+- `/cost-consumption/result` - Cost calculation result
+
+**成本偏差监控** (Cost Deviation - 3-step workflow):
+- `/cost-deviation/input` - Upload screenshots and AI recognition
+- `/cost-deviation/member-list` - Member management
+- `/cost-deviation/result` - Deviation analysis and AI suggestion
+
+**项目管理**:
+- `/project/list` - Project list
+- `/project/detail/:projectId` - Project detail
+
+**其他**:
+- `/dashboard` - Dashboard overview
+- `/user/setting` - User settings
 
 ## Database Schema
 
@@ -148,7 +185,7 @@ Key models (see `backend/prisma/schema.prisma`):
 ## AI Integration
 
 Backend uses external AI services:
-- **Document Parsing**: kimi-k2.5 model via Finna API (OpenAI-compatible format, streaming mode)
+- **Document Parsing**: MiniMax-M2.5 model via Finna API (OpenAI-compatible format, non-streaming mode for JSON stability)
 - **OCR**: Local OCRService (EasyOCR on port 8868) for screenshot text recognition
 
 ### OCRService Architecture
@@ -158,6 +195,12 @@ The OCRService is a standalone Python FastAPI service:
 - GPU optional (configurable via `USE_GPU` env var)
 - Returns structured data for consumption/deviation modules
 
+**OCRService Files**:
+- `app.py` - FastAPI endpoints
+- `ocr_engine.py` - EasyOCR engine wrapper
+- `schemas.py` - Pydantic request/response models
+- `utils.py` - Regex extraction patterns for financial/member data
+
 **OCRService Configuration** (see OCRService/.env):
 - `USE_GPU` - Enable GPU acceleration
 - `LANG` - OCR language (default: `ch`)
@@ -166,7 +209,8 @@ The OCRService is a standalone Python FastAPI service:
 **AI API Configuration** (see backend/.env):
 - `AI_API_URL` - Finna API endpoint
 - `AI_API_KEY` - API key for authentication
-- `AI_MODEL` - Model name (currently: kimi-k2.5)
+- `AI_MODEL` - Model name (currently: MiniMax-M2.5)
+- `AI_MOCK` - Enable mock mode when AI service unavailable (default: false)
 
 ## Environment Variables
 
