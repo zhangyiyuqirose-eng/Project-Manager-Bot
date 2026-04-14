@@ -155,6 +155,9 @@ export interface CalculationTrace {
 export interface CostConsumption {
   projectId: number
   projectCode?: string
+  projectName?: string
+  projectType?: string
+  status?: string
   contractAmount: number
   preSaleRatio: number
   taxRate: number

@@ -276,6 +276,11 @@ export interface AdjustMembersRequest {
 }
 
 export interface ConsumptionResult {
+  projectId?: number
+  projectCode?: string | null
+  projectName?: string
+  projectType?: string | null
+  status?: string
   contractAmount: number
   preSaleRatio: number
   taxRate: number

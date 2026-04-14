@@ -193,6 +193,12 @@ router.get('/project/:projectCode', authMiddleware, async (req: Request, res: Re
     // 获取成本信息
     const projectCost = project.costs[0]
 
+    // 获取成员列表
+    const members = await prisma.projectMember.findMany({
+      where: { projectId: project.id },
+      orderBy: { createdAt: 'asc' }
+    })
+
     // 返回项目信息和人员列表
     const response = {
       projectId: project.id,
@@ -206,7 +212,19 @@ router.get('/project/:projectCode', authMiddleware, async (req: Request, res: Re
       externalLaborCost: project.externalLaborCost || projectCost?.externalLaborCost || 0,
       externalSoftwareCost: project.externalSoftwareCost || projectCost?.externalSoftwareCost || 0,
       otherCost: project.otherCost || projectCost?.otherCost || 0,
-      currentManpowerCost: project.currentManpowerCost || projectCost?.currentManpowerCost || 0
+      currentManpowerCost: project.currentManpowerCost || projectCost?.currentManpowerCost || 0,
+      members: members.map(m => ({
+        memberId: m.id,
+        name: m.name,
+        department: m.department,
+        level: m.level,
+        dailyCost: m.dailyCost,
+        role: m.role,
+        entryTime: m.entryTime,
+        leaveTime: m.leaveTime,
+        isToEnd: m.isToEnd,
+        reportedHours: m.reportedHours
+      }))
     }
 
     sendResponse(res, response, '查询成功')
@@ -982,6 +1000,15 @@ router.get('/:projectId/result', authMiddleware, async (req: Request, res: Respo
       return sendError(res, 403, '无权访问该项目')
     }
 
+    // 获取项目基本信息
+    const project = await prisma.project.findUnique({
+      where: { id: Number(projectId) }
+    })
+
+    if (!project) {
+      return sendError(res, 404, '项目不存在')
+    }
+
     const projectCost = await prisma.projectCost.findFirst({
       where: { projectId: Number(projectId) }
     })
@@ -1013,6 +1040,11 @@ router.get('/:projectId/result', authMiddleware, async (req: Request, res: Respo
     })
 
     const response: ConsumptionResult = {
+      projectId: Number(projectId),
+      projectCode: project.projectCode,
+      projectName: project.projectName,
+      projectType: project.projectType,
+      status: project.status,
       contractAmount: projectCost.contractAmount,
       preSaleRatio: projectCost.preSaleRatio,
       taxRate: projectCost.taxRate,

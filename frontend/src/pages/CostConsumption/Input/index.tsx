@@ -131,6 +131,22 @@ export default function CostConsumptionInput() {
             currentManpowerCost: data.currentManpowerCost || 0,
           })
           setActualProjectId(data.projectId)
+
+          // 反显项目成员列表
+          if (data.members && Array.isArray(data.members)) {
+            setMembers(data.members.map((member: any) => ({
+              key: generateKey(),
+              memberId: member.memberId,
+              name: member.name || '',
+              department: member.department || '',
+              level: member.level || 'P5',
+              dailyCost: member.dailyCost || MEMBER_LEVEL_DAILY_COST[member.level as MemberLevel] || 0.16,
+              entryTime: member.entryTime || null,
+              leaveTime: member.leaveTime || null,
+              isToEnd: member.isToEnd || false,
+            })))
+          }
+
           message.success('项目信息已加载')
         } else {
           // 项目不存在的情况

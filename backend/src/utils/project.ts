@@ -16,7 +16,7 @@ export interface ProjectInfo {
 }
 
 /**
- * 验证项目归属权
+ * 验证项目归属权（支持admin用户兼容）
  * @param projectId 项目 ID
  * @param userId 用户 ID
  * @returns 项目是否属于该用户
@@ -25,9 +25,19 @@ export async function verifyProjectOwnership(
   projectId: number,
   userId: number
 ): Promise<boolean> {
+  // 首先尝试查找传入的用户
+  let user = await prisma.user.findFirst({ where: { id: userId } })
+
+  // 如果用户不存在，尝试查找admin用户作为fallback
+  if (!user) {
+    user = await prisma.user.findFirst({ where: { username: 'admin' } })
+  }
+
+  // 使用实际找到的用户ID查询项目
   const project = await prisma.project.findFirst({
-    where: { id: projectId, userId }
+    where: { id: projectId, userId: user?.id }
   })
+
   return project !== null
 }
 

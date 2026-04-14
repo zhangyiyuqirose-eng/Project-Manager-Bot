@@ -714,6 +714,62 @@ export default function CostConsumptionResult() {
           <Text type="secondary">项目财务数据概览</Text>
         </div>
 
+        {/* 项目标识信息 */}
+        <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+          <Col xs={24} sm={12} md={8}>
+            <div
+              style={{
+                padding: 16,
+                borderRadius: 12,
+                background: '#ffffff',
+                border: '1px solid #f1f5f9',
+              }}
+            >
+              <Text type="secondary" style={{ fontSize: 12 }}>项目编号</Text>
+              <div style={{ marginTop: 4 }}>
+                <Text strong style={{ fontSize: 16, color: '#0f172a' }}>
+                  {result.projectCode || '-'}
+                </Text>
+              </div>
+            </div>
+          </Col>
+          <Col xs={24} sm={12} md={8}>
+            <div
+              style={{
+                padding: 16,
+                borderRadius: 12,
+                background: '#ffffff',
+                border: '1px solid #f1f5f9',
+              }}
+            >
+              <Text type="secondary" style={{ fontSize: 12 }}>项目名称</Text>
+              <div style={{ marginTop: 4 }}>
+                <Text strong style={{ fontSize: 16, color: '#0f172a' }}>
+                  {result.projectName || '-'}
+                </Text>
+              </div>
+            </div>
+          </Col>
+          <Col xs={24} sm={12} md={8}>
+            <div
+              style={{
+                padding: 16,
+                borderRadius: 12,
+                background: '#ffffff',
+                border: '1px solid #f1f5f9',
+              }}
+            >
+              <Text type="secondary" style={{ fontSize: 12 }}>项目类型</Text>
+              <div style={{ marginTop: 4 }}>
+                <Text strong style={{ fontSize: 16, color: '#0f172a' }}>
+                  {result.projectType || '-'}
+                </Text>
+              </div>
+            </div>
+          </Col>
+        </Row>
+
+        {/* 财务数据 */}
         <Row gutter={[16, 16]}>
           <Col xs={12} sm={8} md={6}>
             <div
