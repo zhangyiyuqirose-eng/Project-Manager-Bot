@@ -567,6 +567,37 @@ export default function CostConsumptionInput() {
       const result = JSON.parse(jsonMatch[0])
       console.log('OCR识别结果:', result)
       
+      // 单位转换：采购成本、其他费用（元）自动 ÷10000 转为万元，四舍五入保留2位小数
+      console.log('[OCR] 开始单位转换')
+      console.log('转换前:', result)
+      
+      // 转换外采人力成本（如果是元，转为万元）
+      if (result.externalLaborCost > 10000) {
+        result.externalLaborCost = Math.round((result.externalLaborCost / 10000) * 100) / 100
+      }
+      
+      // 转换外采软件成本（如果是元，转为万元）
+      if (result.externalSoftwareCost > 10000) {
+        result.externalSoftwareCost = Math.round((result.externalSoftwareCost / 10000) * 100) / 100
+      }
+      
+      // 转换其他成本（如果是元，转为万元）
+      if (result.otherCost > 10000) {
+        result.otherCost = Math.round((result.otherCost / 10000) * 100) / 100
+      }
+      
+      // 转换当前人力成本（如果是元，转为万元）
+      if (result.currentManpowerCost > 10000) {
+        result.currentManpowerCost = Math.round((result.currentManpowerCost / 10000) * 100) / 100
+      }
+      
+      // 转换合同金额（如果是元，转为万元）
+      if (result.contractAmount > 10000) {
+        result.contractAmount = Math.round((result.contractAmount / 10000) * 100) / 100
+      }
+      
+      console.log('转换后:', result)
+      
       return result
       
     } catch (error) {
@@ -1005,11 +1036,12 @@ export default function CostConsumptionInput() {
 
         <Form form={form} layout="vertical" initialValues={{
           projectName: '',
+          projectCode: '',
           projectType: 'implementation',
-          status: 'ongoing',
+          projectStatus: 'in_progress',
           contractAmount: 0,
-          preSaleRatio: 0,
-          taxRate: 0.06,
+          preSaleRatio: undefined,
+          taxRate: undefined,
           externalLaborCost: 0,
           externalSoftwareCost: 0,
           otherCost: 0,
@@ -1020,6 +1052,7 @@ export default function CostConsumptionInput() {
               <Form.Item
                 label="项目编号"
                 name="projectCode"
+                rules={[{ required: true, message: '请输入项目编号' }]}
               >
                 <Input
                   value={projectCode}
@@ -1134,7 +1167,7 @@ export default function CostConsumptionInput() {
                 <InputNumber
                   min={0}
                   max={1}
-                  precision={4}
+                  precision={2}
                   style={{ width: '100%', borderRadius: 10 }}
                   placeholder="如: 0.15"
                 />
@@ -1156,7 +1189,7 @@ export default function CostConsumptionInput() {
                 <InputNumber
                   min={0}
                   max={1}
-                  precision={4}
+                  precision={2}
                   style={{ width: '100%', borderRadius: 10 }}
                   placeholder="如: 0.06"
                 />

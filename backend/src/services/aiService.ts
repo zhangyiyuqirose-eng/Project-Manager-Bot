@@ -52,6 +52,7 @@ interface OCRResult {
   taxRate: number
   externalLaborCost: number
   externalSoftwareCost: number
+  otherCost: number
   currentManpowerCost: number
   members?: {
     name: string
@@ -76,10 +77,26 @@ interface DeviationAnalysisResult {
 }
 
 class AIService {
-  // 文本推理模型配置（用于成本预估等功能）
-  private apiUrl: string
-  private apiKey: string
-  private model: string
+  // 成本预估模块配置
+  private estimateConfig = {
+    apiUrl: process.env.AI_API_URL_ESTIMATE || 'https://www.finna.com.cn/v1/chat/completions',
+    apiKey: process.env.AI_API_KEY_ESTIMATE || 'app-lvnmd1sdxoQMg7ck64eLskMv',
+    model: 'MiniMax-M2.5' // 强制使用 MiniMax-M2.5
+  }
+
+  // 成本消耗模块配置
+  private consumptionConfig = {
+    apiUrl: process.env.AI_API_URL_CONSUMPTION || 'https://www.finna.com.cn/v1/chat/completions',
+    apiKey: process.env.AI_API_KEY_CONSUMPTION || '',
+    model: process.env.AI_MODEL_CONSUMPTION || 'MiniMax-M2.5'
+  }
+
+  // 成本偏差模块配置
+  private deviationConfig = {
+    apiUrl: process.env.AI_API_URL_DEVIATION || 'https://www.finna.com.cn/v1/chat/completions',
+    apiKey: process.env.AI_API_KEY_DEVIATION || '',
+    model: process.env.AI_MODEL_DEVIATION || 'MiniMax-M2.5'
+  }
 
   // OCR服务配置
   private ocrProvider: string // 'paddleocr' | 'finna'
@@ -92,11 +109,6 @@ class AIService {
   private enableMock: boolean
 
   constructor() {
-    // 文本推理模型配置
-    this.apiUrl = process.env.AI_API_URL || 'https://www.finna.com.cn/v1/chat/completions'
-    this.apiKey = process.env.AI_API_KEY || ''
-    this.model = process.env.AI_MODEL || 'MiniMax-M2.5'
-
     // OCR 服务配置
     this.ocrProvider = process.env.OCR_PROVIDER || 'paddleocr'
     this.paddleOcrUrl = process.env.PADDLEOCR_URL || 'http://localhost:8868/ocr/structured'
@@ -110,14 +122,11 @@ class AIService {
     // 环境变量校验：生产环境应配置API密钥
     const warnings: string[] = []
 
-    if (!process.env.AI_API_URL) {
-      warnings.push('AI_API_URL 未配置，使用默认值')
+    if (!process.env.AI_API_URL_ESTIMATE) {
+      warnings.push('AI_API_URL_ESTIMATE 未配置，使用默认值')
     }
-    if (!process.env.AI_API_KEY && !this.enableMock) {
-      warnings.push('AI_API_KEY 未配置，AI文本服务将无法正常工作')
-    }
-    if (!process.env.AI_MODEL) {
-      warnings.push('AI_MODEL 未配置，使用默认模型 MiniMax-M2.5')
+    if (!process.env.AI_API_KEY_ESTIMATE && !this.enableMock) {
+      warnings.push('AI_API_KEY_ESTIMATE 未配置，成本预估服务将使用默认API Key')
     }
 
     // 输出配置警告
@@ -128,15 +137,35 @@ class AIService {
       console.warn('[AI Service] 或设置 AI_MOCK=true 启用模拟模式')
     }
 
-    console.log(`[AI Service] 文本推理模型: ${this.model}, OCR服务: ${this.ocrProvider}, Mock模式: ${this.enableMock}`)
+    console.log('[AI Service] 初始化完成:')
+    console.log('  成本预估模块:', this.estimateConfig)
+    console.log('  成本消耗模块:', this.consumptionConfig)
+    console.log('  成本偏差模块:', this.deviationConfig)
+    console.log('  OCR服务:', this.ocrProvider, 'Mock模式:', this.enableMock)
   }
 
   /**
    * 调用AI模型（OpenAI 格式）
    * MiniMax-M2.5 在流式模式下存在JSON格式问题，改用非流式模式确保稳定性
    */
-  private async chat(messages: AIMessage[], systemPrompt?: string): Promise<string> {
+  private async chat(messages: AIMessage[], systemPrompt?: string, module: 'estimate' | 'consumption' | 'deviation' = 'estimate'): Promise<string> {
     try {
+      // 根据模块选择配置
+      let config
+      switch (module) {
+        case 'estimate':
+          config = this.estimateConfig
+          break
+        case 'consumption':
+          config = this.consumptionConfig
+          break
+        case 'deviation':
+          config = this.deviationConfig
+          break
+        default:
+          config = this.estimateConfig
+      }
+
       // 构建消息列表，system 消息放在最前面
       const fullMessages: AIMessage[] = []
       if (systemPrompt) {
@@ -146,20 +175,20 @@ class AIService {
 
       // 使用非流式模式（MiniMax-M2.5 流式模式JSON存在字符丢失问题）
       const requestBody = {
-        model: this.model,
+        model: config.model,
         temperature: 0.7,
         stream: false, // 非流式模式，确保JSON完整
         messages: fullMessages
       }
 
-      console.log(`[AI Service] 调用AI模型: ${this.model}, 消息数: ${fullMessages.length}`)
+      console.log(`[AI Service] 调用AI模型 (${module}): ${config.model}, 消息数: ${fullMessages.length}`)
 
       const response = await axios.post<AIResponse>(
-        this.apiUrl,
+        config.apiUrl,
         requestBody,
         {
           headers: {
-            'Authorization': `Bearer ${this.apiKey}`,
+            'Authorization': `Bearer ${config.apiKey}`,
             'Content-Type': 'application/json; charset=utf-8'
           },
           timeout: 180000 // 3分钟超时
@@ -293,7 +322,7 @@ class AIService {
    * 解析需求文档
    * 模型只判断需求难易程度（五档复杂度），不计算工作量。工作量由代码根据系数计算。
    */
-  async parseDocument(documentText: string): Promise<DocumentParseResult> {
+  async parseDocument(documentText: string, module: 'estimate' | 'consumption' | 'deviation' = 'estimate'): Promise<DocumentParseResult> {
     console.log(`[AI Service] 开始解析文档，长度: ${documentText.length}`)
 
     // Mock模式：直接使用模拟数据
@@ -353,7 +382,8 @@ ${documentText.substring(0, 12000)}`
     // 真实调用AI服务
     const text = await this.chat(
       [{ role: 'user', content: prompt }],
-      systemPrompt
+      systemPrompt,
+      module
     )
 
     if (!text) {
@@ -445,13 +475,47 @@ ${documentText.substring(0, 12000)}`
   async recognizeOCR(imageBase64: string): Promise<OCRResult> {
     console.log(`[AI Service] 开始OCR识别，服务: ${this.ocrProvider}`)
 
+    let result: OCRResult
     // 使用本地 PaddleOCR 服务
     if (this.ocrProvider === 'paddleocr') {
-      return await this.recognizeWithPaddleOCR(imageBase64, 'consumption')
+      result = await this.recognizeWithPaddleOCR(imageBase64, 'consumption')
+    } else {
+      // 使用云端 Finna API
+      result = await this.recognizeWithFinna(imageBase64)
     }
 
-    // 使用云端 Finna API
-    return await this.recognizeWithFinna(imageBase64)
+    // 单位转换：采购成本、其他费用（元）自动 ÷10000 转为万元，四舍五入保留2位小数
+    console.log('[AI Service] 开始单位转换')
+    console.log('转换前:', result)
+
+    // 转换外采人力成本（如果是元，转为万元）
+    if (result.externalLaborCost > 10000) {
+      result.externalLaborCost = Math.round((result.externalLaborCost / 10000) * 100) / 100
+    }
+
+    // 转换外采软件成本（如果是元，转为万元）
+    if (result.externalSoftwareCost > 10000) {
+      result.externalSoftwareCost = Math.round((result.externalSoftwareCost / 10000) * 100) / 100
+    }
+
+    // 转换其他成本（如果是元，转为万元）
+    if (result.otherCost > 10000) {
+      result.otherCost = Math.round((result.otherCost / 10000) * 100) / 100
+    }
+
+    // 转换当前人力成本（如果是元，转为万元）
+    if (result.currentManpowerCost > 10000) {
+      result.currentManpowerCost = Math.round((result.currentManpowerCost / 10000) * 100) / 100
+    }
+
+    // 转换合同金额（如果是元，转为万元）
+    if (result.contractAmount > 10000) {
+      result.contractAmount = Math.round((result.contractAmount / 10000) * 100) / 100
+    }
+
+    console.log('转换后:', result)
+
+    return result
   }
 
   /**
@@ -478,7 +542,12 @@ ${documentText.substring(0, 12000)}`
 
       if (response.data.code === 200 && response.data.data) {
         console.log(`[AI Service] PaddleOCR 识别成功`)
-        return response.data.data
+        // 确保返回结果包含otherCost字段
+        const data = response.data.data
+        return {
+          ...data,
+          otherCost: data.otherCost || 0
+        }
       } else {
         console.error('[AI Service] PaddleOCR 返回错误:', response.data)
       }
@@ -493,6 +562,7 @@ ${documentText.substring(0, 12000)}`
       taxRate: 0.06,
       externalLaborCost: 0,
       externalSoftwareCost: 0,
+      otherCost: 0,
       currentManpowerCost: 0
     }
   }
@@ -507,8 +577,9 @@ ${documentText.substring(0, 12000)}`
 3. 税率（小数，如0.06表示6%）
 4. 外采人力成本（万元）
 5. 外采软件成本（万元）
-6. 当前人力成本（万元）
-7. 项目成员信息（如果可见）
+6. 其他成本（万元）
+7. 当前人力成本（万元）
+8. 项目成员信息（如果可见）
 
 请以JSON格式返回结果，格式如下：
 {
@@ -517,6 +588,7 @@ ${documentText.substring(0, 12000)}`
   "taxRate": 0.06,
   "externalLaborCost": 0,
   "externalSoftwareCost": 0,
+  "otherCost": 0,
   "currentManpowerCost": 0,
   "members": [{"name": "", "level": "P5|P6|P7|P8", "role": "", "reportedHours": 0}]
 }
@@ -557,8 +629,13 @@ ${documentText.substring(0, 12000)}`
         const jsonMatch = text.match(/\{[\s\S]*\}/)
         if (jsonMatch) {
           const result = JSON.parse(jsonMatch[0])
-          console.log(`[AI Service] Finna OCR识别成功:`, JSON.stringify(result))
-          return result
+          // 确保返回结果包含otherCost字段
+          const finalResult = {
+            ...result,
+            otherCost: result.otherCost || 0
+          }
+          console.log(`[AI Service] Finna OCR识别成功:`, JSON.stringify(finalResult))
+          return finalResult
         } else {
           console.error('[AI Service] Finna OCR返回内容无法解析为JSON:', text.substring(0, 500))
         }
@@ -573,6 +650,7 @@ ${documentText.substring(0, 12000)}`
       taxRate: 0.06,
       externalLaborCost: 0,
       externalSoftwareCost: 0,
+      otherCost: 0,
       currentManpowerCost: 0
     }
   }

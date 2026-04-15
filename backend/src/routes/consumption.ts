@@ -833,6 +833,7 @@ router.post('/:projectId/info', authMiddleware, async (req: Request, res: Respon
           data: {
             projectId: Number(projectId),
             name: member.name,
+            department: member.department || null,
             level: member.level,
             dailyCost: member.dailyCost,
             role: member.role,

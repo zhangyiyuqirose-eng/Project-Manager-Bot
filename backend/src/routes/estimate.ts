@@ -249,7 +249,7 @@ router.post('/:projectId/parse', authMiddleware, async (req: Request, res: Respo
     console.log(`[Parse] 开始 AI 分析，文档长度: ${text.length}`)
 
     // 使用 AI 解析文档
-    const aiResult = await aiService.parseDocument(text.substring(0, 12000))
+    const aiResult = await aiService.parseDocument(text.substring(0, 12000), 'estimate')
 
     console.log(`[Parse] AI 分析完成，模块数: ${aiResult.modules?.length || 0}`)
 

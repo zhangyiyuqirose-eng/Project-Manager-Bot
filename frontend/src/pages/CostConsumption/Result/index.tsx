@@ -229,6 +229,7 @@ export default function CostConsumptionResult() {
                 memberId: m.id,
                 name: m.name,
                 level: m.level,
+                department: m.department,
                 dailyCost: m.dailyCost,
                 entryTime: m.entryTime || null,
                 leaveTime: m.leaveTime || null,
