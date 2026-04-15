@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Card,
@@ -66,6 +66,36 @@ const levelOptions: { value: MemberLevel; label: string }[] = [
   { value: 'P8', label: 'P8' },
 ]
 
+// 部门选项
+const departmentOptions = [
+  { value: '客服', label: '客服' },
+  { value: '公司领导', label: '公司领导' },
+  { value: '办公室（党委办公室、党委宣传部）', label: '办公室（党委办公室、党委宣传部）' },
+  { value: '产品研发部', label: '产品研发部' },
+  { value: '财务部', label: '财务部' },
+  { value: '大数据开发部', label: '大数据开发部' },
+  { value: '互联网应用开发事业部', label: '互联网应用开发事业部' },
+  { value: '集成运维部', label: '集成运维部' },
+  { value: '技术创新事业部', label: '技术创新事业部' },
+  { value: '人工智能部', label: '人工智能部' },
+  { value: '实习生', label: '实习生' },
+  { value: '项目管理部', label: '项目管理部' },
+  { value: '银行转型部', label: '银行转型部' },
+  { value: '云计算应用部', label: '云计算应用部' },
+  { value: '市场营销部', label: '市场营销部' },
+  { value: '审计部', label: '审计部' },
+  { value: '纪委办公室', label: '纪委办公室' },
+  { value: '效能研发部', label: '效能研发部' },
+  { value: '党委组织部（人力资源部）', label: '党委组织部（人力资源部）' },
+  { value: '党群工作部', label: '党群工作部' },
+  { value: '苏州分公司', label: '苏州分公司' },
+  { value: '信息安全部', label: '信息安全部' },
+  { value: '数字运营部', label: '数字运营部' },
+  { value: '京津冀对外拓展工作室', label: '京津冀对外拓展工作室' },
+  { value: '三方人员', label: '三方人员' },
+  { value: '员工服务', label: '员工服务' },
+]
+
 interface MemberFormData {
   key: string
   memberId?: number
@@ -90,8 +120,11 @@ export default function CostConsumptionInput() {
 
   // 项目编号查询相关状态
   const [projectCode, setProjectCode] = useState('')
-  const [_querying, setQuerying] = useState(false) // 用于后续查询状态显示
+  const [querying, setQuerying] = useState(false) // 用于后续查询状态显示
   const [actualProjectId, setActualProjectId] = useState<number | null>(null)
+  
+  // 防抖相关
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   // OCR识别结果表单
   const [form] = Form.useForm()
@@ -104,7 +137,7 @@ export default function CostConsumptionInput() {
   const generateKey = () => `member_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 
   // 根据项目编号查询项目信息
-  const handleQueryByProjectCode = async () => {
+  const handleQueryByProjectCode = useCallback(async () => {
     if (!projectCode) {
       message.warning('请输入项目编号')
       return
@@ -120,7 +153,7 @@ export default function CostConsumptionInput() {
           // 反显项目信息
           form.setFieldsValue({
             projectName: data.projectName || '',
-            projectType: data.projectType || 'software',
+            projectType: data.projectType || 'implementation',
             status: data.status || 'ongoing',
             contractAmount: data.contractAmount || 0,
             preSaleRatio: data.preSaleRatio || 0,
@@ -188,14 +221,100 @@ export default function CostConsumptionInput() {
     } finally {
       setQuerying(false)
     }
-  }
+  }, [projectCode, form])
+
+  // 处理URL参数，支持从上级页面反显项目信息
+  useEffect(() => {
+    const projectCodeParam = searchParams.get('projectCode')
+    if (projectCodeParam) {
+      // 直接查询，不设置projectCode状态，避免循环调用
+      const fetchProject = async () => {
+        if (debounceTimerRef.current) {
+          clearTimeout(debounceTimerRef.current)
+        }
+        debounceTimerRef.current = setTimeout(async () => {
+          setQuerying(true)
+          try {
+            const response = await consumptionApi.queryByProjectCode(projectCodeParam)
+            if (response.data.code === 0 || response.data.code === 200) {
+              const data = response.data.data
+              if (data) {
+                form.setFieldsValue({
+                  projectName: data.projectName || '',
+                  projectType: data.projectType || 'implementation',
+                  status: data.status || 'ongoing',
+                  contractAmount: data.contractAmount || 0,
+                  preSaleRatio: data.preSaleRatio || 0,
+                  taxRate: data.taxRate || 0.06,
+                  externalLaborCost: data.externalLaborCost || 0,
+                  externalSoftwareCost: data.externalSoftwareCost || 0,
+                  otherCost: data.otherCost || 0,
+                  currentManpowerCost: data.currentManpowerCost || 0,
+                })
+                setActualProjectId(data.projectId)
+                if (data.members && Array.isArray(data.members)) {
+                  setMembers(data.members.map((member: any) => ({
+                    key: generateKey(),
+                    memberId: member.memberId,
+                    name: member.name || '',
+                    department: member.department || '',
+                    level: member.level || 'P5',
+                    dailyCost: member.dailyCost || MEMBER_LEVEL_DAILY_COST[member.level as MemberLevel] || 0.16,
+                    entryTime: member.entryTime || null,
+                    leaveTime: member.leaveTime || null,
+                    isToEnd: member.isToEnd || false,
+                  })))
+                }
+                message.success('项目信息已加载')
+              } else {
+                const errorMsg = response.data.message || '项目不存在，请补充完整信息后保存'
+                message.warning(errorMsg)
+                form.resetFields([
+                  'projectName',
+                  'projectType',
+                  'status',
+                  'contractAmount',
+                  'preSaleRatio',
+                  'taxRate',
+                  'externalLaborCost',
+                  'externalSoftwareCost',
+                  'otherCost',
+                  'currentManpowerCost'
+                ])
+                setActualProjectId(null)
+              }
+            }
+          } catch (err: any) {
+            const errorMsg = err?.response?.data?.message || '项目不存在，请补充完整信息后保存'
+            message.warning(errorMsg)
+            form.resetFields([
+              'projectName',
+              'projectType',
+              'status',
+              'contractAmount',
+              'preSaleRatio',
+              'taxRate',
+              'externalLaborCost',
+              'externalSoftwareCost',
+              'otherCost',
+              'currentManpowerCost'
+            ])
+            setActualProjectId(null)
+          } finally {
+            setQuerying(false)
+          }
+        }, 1000)
+      }
+      fetchProject()
+    }
+  }, [searchParams, form])
 
   // 保存项目信息
   const handleSaveProject = async () => {
     try {
       const formValues = await form.validateFields()
 
-      if (!projectCode) {
+      if (!formValues.projectCode) {
         message.warning('请输入项目编号')
         return
       }
@@ -203,7 +322,7 @@ export default function CostConsumptionInput() {
       setSaving(true)
 
       const projectData = {
-        projectCode,
+        projectCode: formValues.projectCode,
         projectName: encodeURIComponent(formValues.projectName),
         contractAmount: formValues.contractAmount,
         projectType: formValues.projectType,
@@ -289,7 +408,7 @@ export default function CostConsumptionInput() {
     return true
   }
 
-  // OCR识别处理
+  // OCR识别处理 - 使用大模型API
   const handleOcrRecognize = async () => {
     if (fileList.length === 0) {
       message.warning('请先上传OA截图')
@@ -299,27 +418,176 @@ export default function CostConsumptionInput() {
     setOcrLoading(true)
     try {
       const files = fileList.map((f) => f.originFileObj as File).filter(Boolean)
-      const response = await consumptionApi.uploadOcrImage(files)
-
-      if (response.data.code === 0 || response.data.code === 200) {
-        const ocrData = response.data.data
+      
+      // 使用大模型API进行OCR识别
+      const ocrData = await recognizeWithLLM(files[0])
+      
+      if (ocrData) {
         // 回填OCR识别结果到表单
         form.setFieldsValue({
+          projectName: ocrData?.projectName || '',
+          projectCode: ocrData?.projectCode || '',
           contractAmount: ocrData?.contractAmount || 0,
           preSaleRatio: ocrData?.preSaleRatio || 0,
-          taxRate: ocrData?.taxRate || 0,
+          taxRate: ocrData?.taxRate || 0.06,
           externalLaborCost: ocrData?.externalLaborCost || 0,
           externalSoftwareCost: ocrData?.externalSoftwareCost || 0,
+          otherCost: ocrData?.otherCost || 0,
           currentManpowerCost: ocrData?.currentManpowerCost || 0,
         })
+        
+        // 更新projectCode状态变量，保持一致性
+        if (ocrData?.projectCode) {
+          setProjectCode(ocrData.projectCode)
+        }
+        
+        // 填充成员信息
+        if (ocrData?.members && Array.isArray(ocrData.members) && ocrData.members.length > 0) {
+          const newMembers = ocrData.members.map((member: any) => ({
+            key: generateKey(),
+            memberId: undefined,
+            name: member.name || '',
+            department: member.department || '',
+            level: member.level || 'P5',
+            dailyCost: member.dailyCost || MEMBER_LEVEL_DAILY_COST[member.level as MemberLevel] || 0.16,
+            entryTime: member.entryTime || null,
+            leaveTime: member.leaveTime || null,
+            isToEnd: member.isToEnd || false,
+            reportedHours: member.reportedHours || 0,
+          }))
+          
+          // 合并现有成员和新成员
+          setMembers([...members, ...newMembers])
+        }
+        
         setOcrSuccess(true)
         message.success('OCR识别成功，请核对信息')
       }
-    } catch {
+    } catch (error) {
+      console.error('OCR识别失败:', error)
       message.error('OCR识别失败，请重试')
     } finally {
       setOcrLoading(false)
     }
+  }
+
+  // 使用大模型API进行OCR识别
+  const recognizeWithLLM = async (imageFile: File): Promise<any> => {
+    try {
+      // 将图片转换为base64
+      const imageBase64 = await fileToBase64(imageFile)
+      
+      // 大模型API配置
+      const LLM_CONFIG = {
+        URL: 'https://www.finna.com.cn/v1/chat/completions',
+        MODEL: 'qwen2.5-vl-72b-instruct',
+        API_KEY: 'app-7FrGiVvM1BjpWKSf9vsUF6rJ'
+      }
+      
+      // 构建请求体
+      const requestBody = {
+        model: LLM_CONFIG.MODEL,
+        messages: [
+          {
+            role: 'system',
+            content: `你是一个专业的财务数据分析师。请分析用户提供的OA系统截图，提取以下财务信息：
+1. 项目名称
+2. 项目编号
+3. 合同金额（万元）
+4. 售前比例（小数，如0.15表示15%）
+5. 税率（小数，如0.06表示6%）
+6. 外采人力成本（万元）
+7. 外采软件成本（万元）
+8. 其他成本（万元）
+9. 当前人力成本（万元）
+10. 项目成员信息（姓名、等级、部门、工时）
+
+请以JSON格式返回结果，格式如下：
+{
+  "projectName": "",
+  "projectCode": "",
+  "contractAmount": 0,
+  "preSaleRatio": 0,
+  "taxRate": 0.06,
+  "externalLaborCost": 0,
+  "externalSoftwareCost": 0,
+  "otherCost": 0,
+  "currentManpowerCost": 0,
+  "members": [
+    {
+      "name": "",
+      "level": "P5|P6|P7|P8",
+      "department": "",
+      "reportedHours": 0
+    }
+  ]
+}
+
+只返回JSON，不要返回其他内容。如果图片中无法找到某项信息，对应字段填0或空字符串。`
+          },
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: '请识别并提取图片中的项目信息和财务数据。仔细观察图片中的所有数字和文字信息。' },
+              { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${imageBase64}` } }
+            ]
+          }
+        ],
+        temperature: 0.3,
+        stream: false
+      }
+      
+      // 调用大模型API
+      const response = await fetch(LLM_CONFIG.URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${LLM_CONFIG.API_KEY}`
+        },
+        body: JSON.stringify(requestBody)
+      })
+      
+      if (!response.ok) {
+        throw new Error(`API调用失败: ${response.status} ${response.statusText}`)
+      }
+      
+      const data = await response.json()
+      const content = data.choices?.[0]?.message?.content
+      
+      if (!content) {
+        throw new Error('API返回内容为空')
+      }
+      
+      // 解析JSON结果
+      const jsonMatch = content.match(/\{[\s\S]*\}/)
+      if (!jsonMatch) {
+        throw new Error('无法从API返回中提取JSON')
+      }
+      
+      const result = JSON.parse(jsonMatch[0])
+      console.log('OCR识别结果:', result)
+      
+      return result
+      
+    } catch (error) {
+      console.error('OCR识别失败:', error)
+      throw error
+    }
+  }
+
+  // 将文件转换为base64
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => {
+        const result = reader.result as string
+        // 移除data:image/xxx;base64,前缀
+        const base64 = result.split(',')[1]
+        resolve(base64)
+      }
+      reader.onerror = reject
+      reader.readAsDataURL(file)
+    })
   }
 
   // 处理文件变化
@@ -373,13 +641,18 @@ export default function CostConsumptionInput() {
       title: '部门',
       dataIndex: 'department',
       key: 'department',
-      width: 120,
+      width: 200,
       render: (value: string, record) => (
-        <Input
-          value={value || ''}
-          onChange={(e) => handleMemberChange(record.key, 'department', e.target.value)}
-          placeholder="请输入部门"
+        <Select
+          value={value || undefined}
+          onChange={(v) => handleMemberChange(record.key, 'department', v)}
+          options={departmentOptions}
+          placeholder="请选择部门"
           style={{ width: '100%', borderRadius: 8 }}
+          showSearch
+          filterOption={(input, option) =>
+            (option?.label || '').toLowerCase().includes(input.toLowerCase())
+          }
         />
       ),
     },
@@ -591,6 +864,22 @@ export default function CostConsumptionInput() {
       const calcResponse = await consumptionApi.calculateCost(Number(pid))
 
       if (calcResponse.data.code === 0 || calcResponse.data.code === 200) {
+        // 在前端控制台输出计算过程
+        const data = calcResponse.data.data
+        if (data.calculationDetails) {
+          console.log('=== 成本计算过程 ===')
+          console.log('合同金额:', data.calculationDetails.contractAmount)
+          console.log('售前比例:', data.calculationDetails.preSaleRatio)
+          console.log('税率:', data.calculationDetails.taxRate)
+          console.log('外采人力成本:', data.calculationDetails.externalLaborCost)
+          console.log('外采软件成本:', data.calculationDetails.externalSoftwareCost)
+          console.log('外采成本总计:', data.calculationDetails.externalCost)
+          console.log('其他成本:', data.calculationDetails.otherCost)
+          console.log('当前人力成本:', data.calculationDetails.currentManpowerCost)
+          console.log('计算式:', data.calculationDetails.formula)
+          console.log('计算式（具体数值）:', data.calculationDetails.formulaValues)
+          console.log('计算结果 - 可消耗成本:', data.calculationDetails.availableCost)
+        }
         message.success('核算完成')
         setCurrentStep(1)
         navigate(`/cost-consumption/result?projectId=${pid}`)
@@ -716,7 +1005,7 @@ export default function CostConsumptionInput() {
 
         <Form form={form} layout="vertical" initialValues={{
           projectName: '',
-          projectType: 'software',
+          projectType: 'implementation',
           status: 'ongoing',
           contractAmount: 0,
           preSaleRatio: 0,
@@ -737,12 +1026,26 @@ export default function CostConsumptionInput() {
                   onChange={(e) => setProjectCode(e.target.value)}
                   onBlur={() => {
                     if (projectCode.trim()) {
-                      handleQueryByProjectCode()
+                      // 防抖处理，避免频繁请求
+                      if (debounceTimerRef.current) {
+                        clearTimeout(debounceTimerRef.current)
+                      }
+                      debounceTimerRef.current = setTimeout(() => {
+                        handleQueryByProjectCode()
+                      }, 2000) // 增加防抖时间到2000ms，进一步减少请求频率
                     }
                   }}
                   placeholder="请输入项目编号"
                   style={{ borderRadius: 10 }}
-                  onPressEnter={handleQueryByProjectCode}
+                  onPressEnter={() => {
+                    // 防抖处理，避免频繁请求
+                    if (debounceTimerRef.current) {
+                      clearTimeout(debounceTimerRef.current)
+                    }
+                    debounceTimerRef.current = setTimeout(() => {
+                      handleQueryByProjectCode()
+                    }, 2000) // 增加防抖时间到2000ms，进一步减少请求频率
+                  }}
                 />
               </Form.Item>
             </Col>
@@ -768,10 +1071,10 @@ export default function CostConsumptionInput() {
                   placeholder="请选择项目类型"
                   style={{ borderRadius: 10 }}
                   options={[
-                    { value: 'software', label: '软件开发' },
-                    { value: 'hardware', label: '硬件采购' },
-                    { value: 'service', label: '技术服务' },
-                    { value: 'integration', label: '系统集成' },
+                    { value: 'implementation', label: '实施项目' },
+                    { value: 'maintenance', label: '运维项目' },
+                    { value: 'consulting', label: '咨询项目' },
+                    { value: 'development', label: '开发项目' },
                   ]}
                 />
               </Form.Item>
@@ -1072,33 +1375,22 @@ export default function CostConsumptionInput() {
           >
             返回首页
           </Button>
-          <div style={{ display: 'flex', gap: 16 }}>
-            <Button
-              size="large"
-              icon={<SaveOutlined />}
-              onClick={handleSaveMembers}
-              loading={saving}
-              style={{ borderRadius: 14, height: 48 }}
-            >
-              保存人员
-            </Button>
-            <Button
-              type="primary"
-              size="large"
-              onClick={handleCalculate}
-              loading={saving}
-              style={{
-                borderRadius: 14,
-                height: 48,
-                background: 'linear-gradient(135deg, #10B981 0%, #34D399 100%)',
-                border: 'none',
-                fontWeight: 600,
-              }}
-            >
-              开始核算
-              <ArrowRightOutlined style={{ marginLeft: 10 }} />
-            </Button>
-          </div>
+          <Button
+            type="primary"
+            size="large"
+            onClick={handleCalculate}
+            loading={saving}
+            style={{
+              borderRadius: 14,
+              height: 48,
+              background: 'linear-gradient(135deg, #10B981 0%, #34D399 100%)',
+              border: 'none',
+              fontWeight: 600,
+            }}
+          >
+            开始核算
+            <ArrowRightOutlined style={{ marginLeft: 10 }} />
+          </Button>
         </div>
       </Card>
     </div>

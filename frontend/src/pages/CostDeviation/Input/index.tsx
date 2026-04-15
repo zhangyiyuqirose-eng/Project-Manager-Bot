@@ -58,6 +58,36 @@ const levelOptions: { value: MemberLevel; label: string }[] = [
   { value: 'P8', label: 'P8' },
 ]
 
+// 部门选项
+const departmentOptions = [
+  { value: '客服', label: '客服' },
+  { value: '公司领导', label: '公司领导' },
+  { value: '办公室（党委办公室、党委宣传部）', label: '办公室（党委办公室、党委宣传部）' },
+  { value: '产品研发部', label: '产品研发部' },
+  { value: '财务部', label: '财务部' },
+  { value: '大数据开发部', label: '大数据开发部' },
+  { value: '互联网应用开发事业部', label: '互联网应用开发事业部' },
+  { value: '集成运维部', label: '集成运维部' },
+  { value: '技术创新事业部', label: '技术创新事业部' },
+  { value: '人工智能部', label: '人工智能部' },
+  { value: '实习生', label: '实习生' },
+  { value: '项目管理部', label: '项目管理部' },
+  { value: '银行转型部', label: '银行转型部' },
+  { value: '云计算应用部', label: '云计算应用部' },
+  { value: '市场营销部', label: '市场营销部' },
+  { value: '审计部', label: '审计部' },
+  { value: '纪委办公室', label: '纪委办公室' },
+  { value: '效能研发部', label: '效能研发部' },
+  { value: '党委组织部（人力资源部）', label: '党委组织部（人力资源部）' },
+  { value: '党群工作部', label: '党群工作部' },
+  { value: '苏州分公司', label: '苏州分公司' },
+  { value: '信息安全部', label: '信息安全部' },
+  { value: '数字运营部', label: '数字运营部' },
+  { value: '京津冀对外拓展工作室', label: '京津冀对外拓展工作室' },
+  { value: '三方人员', label: '三方人员' },
+  { value: '员工服务', label: '员工服务' },
+]
+
 // 成员表单数据接口
 interface MemberFormData {
   key: string
@@ -249,13 +279,18 @@ export default function CostDeviationInput() {
       title: '部门',
       dataIndex: 'department',
       key: 'department',
-      width: 120,
+      width: 200,
       render: (value: string, record) => (
-        <Input
-          value={value || ''}
-          onChange={(e) => handleMemberChange(record.key, 'department', e.target.value)}
-          placeholder="请输入部门"
+        <Select
+          value={value || undefined}
+          onChange={(v) => handleMemberChange(record.key, 'department', v)}
+          options={departmentOptions}
+          placeholder="请选择部门"
           style={{ width: '100%', borderRadius: 8 }}
+          showSearch
+          filterOption={(input, option) =>
+            (option?.label || '').toLowerCase().includes(input.toLowerCase())
+          }
         />
       ),
     },

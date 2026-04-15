@@ -13,6 +13,7 @@ import {
   Tag,
   DatePicker,
   Select,
+  Input,
   InputNumber,
 } from 'antd'
 import {
@@ -60,14 +61,48 @@ const levelOptions: { value: MemberLevel; label: string }[] = [
   { value: 'P8', label: 'P8' },
 ]
 
+// 部门选项
+const departmentOptions = [
+  { value: '客服', label: '客服' },
+  { value: '公司领导', label: '公司领导' },
+  { value: '办公室（党委办公室、党委宣传部）', label: '办公室（党委办公室、党委宣传部）' },
+  { value: '产品研发部', label: '产品研发部' },
+  { value: '财务部', label: '财务部' },
+  { value: '大数据开发部', label: '大数据开发部' },
+  { value: '互联网应用开发事业部', label: '互联网应用开发事业部' },
+  { value: '集成运维部', label: '集成运维部' },
+  { value: '技术创新事业部', label: '技术创新事业部' },
+  { value: '人工智能部', label: '人工智能部' },
+  { value: '实习生', label: '实习生' },
+  { value: '项目管理部', label: '项目管理部' },
+  { value: '银行转型部', label: '银行转型部' },
+  { value: '云计算应用部', label: '云计算应用部' },
+  { value: '市场营销部', label: '市场营销部' },
+  { value: '审计部', label: '审计部' },
+  { value: '纪委办公室', label: '纪委办公室' },
+  { value: '效能研发部', label: '效能研发部' },
+  { value: '党委组织部（人力资源部）', label: '党委组织部（人力资源部）' },
+  { value: '党群工作部', label: '党群工作部' },
+  { value: '苏州分公司', label: '苏州分公司' },
+  { value: '信息安全部', label: '信息安全部' },
+  { value: '数字运营部', label: '数字运营部' },
+  { value: '京津冀对外拓展工作室', label: '京津冀对外拓展工作室' },
+  { value: '三方人员', label: '三方人员' },
+  { value: '员工服务', label: '员工服务' },
+]
+
 interface MemberFormData {
   key: string
   memberId?: number
   name: string
+  department?: string
   level: MemberLevel
   dailyCost: number
   entryTime: string | null
   leaveTime: string | null
+  isToEnd?: boolean
+  role?: string
+  reportedHours?: number
 }
 
 // 统计卡片组件
@@ -90,14 +125,16 @@ function StatCard({ title, value, suffix, precision, icon, color, gradient, stat
         border: '1px solid #f1f5f9',
         height: '100%',
         overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
       }}
     >
       <div
         style={{
           background: gradient,
-          padding: '20px 16px',
+          padding: '16px 16px',
           borderRadius: 12,
-          marginBottom: 16,
+          marginBottom: 12,
         }}
       >
         <div
@@ -116,36 +153,38 @@ function StatCard({ title, value, suffix, precision, icon, color, gradient, stat
         </div>
         <Text style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: 12 }}>{title}</Text>
       </div>
-      <div style={{ textAlign: 'center' }}>
-        <Text
-          strong
-          style={{
-            fontSize: 32,  // 字体放大
-            color,
-            fontWeight: 700,
-          }}
-        >
-          {typeof value === 'number' && precision !== undefined ? value.toFixed(precision) : value}
-        </Text>
-        {suffix && (
-          <Text type="secondary" style={{ fontSize: 14, marginLeft: 4 }}>
-            {suffix}
-          </Text>
-        )}
-        {status === 'error' && (
-          <Tag
-            icon={<ExclamationCircleOutlined />}
+      <div style={{ textAlign: 'center', flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <Text
+            strong
             style={{
-              marginLeft: 8,
-              borderRadius: 8,
-              background: '#EF4444',
-              color: '#fff',
-              border: 'none',
+              fontSize: 28,  // 调整字体大小，确保日期不换行
+              color,
+              fontWeight: 700,
             }}
           >
-            已超支
-          </Tag>
-        )}
+            {typeof value === 'number' && precision !== undefined ? value.toFixed(precision) : value}
+          </Text>
+          {suffix && (
+            <Text type="secondary" style={{ fontSize: 14, marginLeft: 4 }}>
+              {suffix}
+            </Text>
+          )}
+          {status === 'error' && (
+            <Tag
+              icon={<ExclamationCircleOutlined />}
+              style={{
+                marginLeft: 8,
+                borderRadius: 8,
+                background: '#EF4444',
+                color: '#fff',
+                border: 'none',
+              }}
+            >
+              已超支
+            </Tag>
+          )}
+        </div>
       </div>
     </Card>
   )
@@ -183,11 +222,11 @@ export default function CostConsumptionResult() {
           const data = response.data.data as CostConsumption
           setResult(data)
           // 初始化成员列表
-          if (data.teamMembers && data.teamMembers.length > 0) {
+          if (data.members && data.members.length > 0) {
             setMembers(
-              data.teamMembers.map((m, index) => ({
+              data.members.map((m, index) => ({
                 key: `member_${index}_${Date.now()}`,
-                memberId: m.memberId,
+                memberId: m.id,
                 name: m.name,
                 level: m.level,
                 dailyCost: m.dailyCost,
@@ -218,11 +257,30 @@ export default function CostConsumptionResult() {
       key: 'name',
       width: 120,
       render: (value: string, record) => (
-        <InputNumber
+        <Input
           value={value}
-          onChange={(v) => handleMemberChange(record.key, 'name', v)}
+          onChange={(e) => handleMemberChange(record.key, 'name', e.target.value)}
           placeholder="请输入姓名"
           style={{ width: '100%', borderRadius: 8 }}
+        />
+      ),
+    },
+    {
+      title: '部门',
+      dataIndex: 'department',
+      key: 'department',
+      width: 200,
+      render: (value: string, record) => (
+        <Select
+          value={value || undefined}
+          onChange={(v) => handleMemberChange(record.key, 'department', v)}
+          options={departmentOptions}
+          placeholder="请选择部门"
+          style={{ width: '100%', borderRadius: 8 }}
+          showSearch
+          filterOption={(input, option) =>
+            (option?.label || '').toLowerCase().includes(input.toLowerCase())
+          }
         />
       ),
     },
@@ -245,7 +303,7 @@ export default function CostConsumptionResult() {
       title: '日成本(万元)',
       dataIndex: 'dailyCost',
       key: 'dailyCost',
-      width: 120,
+      width: 100,
       render: (value: number) => (
         <Tag
           style={{
@@ -333,6 +391,7 @@ export default function CostConsumptionResult() {
     const newMember: MemberFormData = {
       key: generateKey(),
       name: '',
+      department: '',
       level: 'P5' as MemberLevel,
       dailyCost: MEMBER_LEVEL_DAILY_COST['P5'],
       entryTime: null,
@@ -359,35 +418,28 @@ export default function CostConsumptionResult() {
 
     setRecalculating(true)
     try {
-      // 先保存调整后的成员
-      await consumptionApi.adjustMembers(Number(projectId), validMembers.map((m) => ({
-        memberId: m.memberId,
-        name: m.name,
-        level: m.level,
-        dailyCost: m.dailyCost,
-        entryTime: m.entryTime,
-        leaveTime: m.leaveTime,
-      })))
-
-      // 重新计算
-      const calcResponse = await consumptionApi.calculateCost(Number(projectId))
+      // 直接调用计算成本的接口，传递当前页面的成员数据
+      const calcResponse = await consumptionApi.calculateCost(Number(projectId), validMembers)
       if (calcResponse.data.code === 0 || calcResponse.data.code === 200) {
         message.success('重新计算完成')
         const data = calcResponse.data.data as CostConsumption
         setResult(data)
-        // 更新成员列表
-        if (data.teamMembers && data.teamMembers.length > 0) {
-          setMembers(
-            data.teamMembers.map((m, index) => ({
-              key: `member_${index}_${Date.now()}`,
-              memberId: m.memberId,
-              name: m.name,
-              level: m.level,
-              dailyCost: m.dailyCost,
-              entryTime: m.entryTime || null,
-              leaveTime: m.leaveTime || null,
-            }))
-          )
+        // 不更新成员列表，保留用户输入的信息
+
+        // 在前端控制台输出计算过程
+        if (data.calculationDetails) {
+          console.log('=== 成本计算过程 ===')
+          console.log('合同金额:', data.calculationDetails.contractAmount)
+          console.log('售前比例:', data.calculationDetails.preSaleRatio)
+          console.log('税率:', data.calculationDetails.taxRate)
+          console.log('外采人力成本:', data.calculationDetails.externalLaborCost)
+          console.log('外采软件成本:', data.calculationDetails.externalSoftwareCost)
+          console.log('外采成本总计:', data.calculationDetails.externalCost)
+          console.log('其他成本:', data.calculationDetails.otherCost)
+          console.log('当前人力成本:', data.calculationDetails.currentManpowerCost)
+          console.log('计算式:', data.calculationDetails.formula)
+          console.log('计算式（具体数值）:', data.calculationDetails.formulaValues)
+          console.log('计算结果 - 可消耗成本:', data.calculationDetails.availableCost)
         }
       }
     } catch {
@@ -409,12 +461,14 @@ export default function CostConsumptionResult() {
       // 保存成员调整
       const validMembers = members.filter((m) => m.name && m.level)
       await consumptionApi.adjustMembers(Number(projectId), validMembers.map((m) => ({
-        memberId: m.memberId,
         name: m.name,
+        department: m.department,
         level: m.level,
         dailyCost: m.dailyCost,
         entryTime: m.entryTime,
         leaveTime: m.leaveTime,
+        role: m.role || '',
+        reportedHours: m.reportedHours || 0,
       })))
 
       message.success('项目保存成功')
@@ -489,6 +543,8 @@ export default function CostConsumptionResult() {
         <Steps current={currentStep} items={stepItems} style={{ marginBottom: 8 }} />
       </Card>
 
+
+
       {/* 功能介绍区域 */}
       <div
         style={{
@@ -555,6 +611,17 @@ export default function CostConsumptionResult() {
         </Col>
         <Col xs={12} sm={6} lg={4}>
           <StatCard
+            title="外采成本"
+            value={(result.externalLaborCost || 0) + (result.externalSoftwareCost || 0)}
+            suffix="万元"
+            precision={2}
+            icon={<DollarOutlined />}
+            color="#EC4899"
+            gradient="linear-gradient(135deg, #EC4899 0%, #F472B6 100%)"
+          />
+        </Col>
+        <Col xs={12} sm={6} lg={4}>
+          <StatCard
             title="其它成本"
             value={result.otherCost || 0}
             suffix="万元"
@@ -577,13 +644,30 @@ export default function CostConsumptionResult() {
         <Col xs={12} sm={6} lg={4}>
           <StatCard
             title="燃尽日期"
-            value={result.burnoutDate ? dayjs(result.burnoutDate).format('YYYY-MM-DD') : '-'}
+            value={result.burnoutDate ? dayjs(result.burnoutDate).format('YYYY/MM/DD') : '-'}
             icon={<FireOutlined />}
             color={result.burnoutDate ? '#F59E0B' : '#64748b'}
             gradient="linear-gradient(135deg, #F59E0B 0%, #FBBF24 100%)"
           />
         </Col>
       </Row>
+
+      {/* 燃尽日期计算说明 */}
+      {result.burnoutDate && (
+        <div style={{ 
+          marginTop: 12, 
+          marginBottom: 16,
+          padding: '8px 12px',
+          background: '#FFF7ED',
+          borderRadius: 8,
+          border: '1px solid #FED7AA',
+          textAlign: 'center'
+        }}>
+          <Text style={{ fontSize: 13, color: 'red', fontWeight: 'bold' }}>
+            ⚠️ 2027年及以后法定节假日未公布，结果暂按扣除周末计算，实际以国务院放假安排为准。
+          </Text>
+        </div>
+      )}
 
       {/* 超支警告 */}
       {isOverBudget && (
@@ -624,332 +708,151 @@ export default function CostConsumptionResult() {
           borderRadius: 20,
           marginBottom: 24,
           border: '1px solid #f1f5f9',
+          padding: '16px 20px',
         }}
       >
-        <div style={{ marginBottom: 20 }}>
-          <Title level={4} style={{ marginBottom: 4, fontWeight: 600 }}>
+        <div style={{ marginBottom: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center' }}>
             <DollarOutlined style={{ marginRight: 8, color: '#3B82F6' }} />
-            计算公式说明
-          </Title>
-          <Text type="secondary">了解成本核算的计算逻辑</Text>
+            <div style={{ 
+              fontSize: '18px', 
+              fontWeight: 600, 
+              lineHeight: '1.5', 
+              color: '#1D2129',
+              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
+            }}>
+              计算公式说明
+            </div>
+          </div>
+
         </div>
 
-        <Row gutter={[16, 16]}>
+        <Row gutter={[12, 16]}>
           <Col xs={24} md={12}>
             <div
               style={{
-                padding: 20,
+                padding: '12px 16px',
                 borderRadius: 12,
               }}
             >
-              <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+              <div style={{ 
+                fontSize: '15px', 
+                fontWeight: 500, 
+                lineHeight: '1.6', 
+                color: '#272E3B',
+                marginBottom: 8,
+                fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
+              }}>
                 可消耗成本
-              </Text>
-              <Text strong style={{ fontSize: 18, color: '#0f172a' }}>
-                合同金额 × (1 - 售前比例) × (1 - 税率) - 外采成本 - 当前人力成本
-              </Text>
+              </div>
+              <div style={{ 
+                fontSize: '16px', 
+                fontWeight: 400, 
+                lineHeight: '1.7', 
+                color: '#1D2129',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
+              }}>
+                合同金额 × (1 - 售前比例-税率)  - 外采成本 - 当前人力成本
+              </div>
             </div>
           </Col>
           <Col xs={24} md={12}>
             <div
               style={{
-                padding: 20,
+                padding: '12px 16px',
                 borderRadius: 12,
               }}
             >
-              <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+              <div style={{ 
+                fontSize: '15px', 
+                fontWeight: 500, 
+                lineHeight: '1.6', 
+                color: '#272E3B',
+                marginBottom: 8,
+                fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
+              }}>
                 日人力成本
-              </Text>
-              <Text strong style={{ fontSize: 18, color: '#0f172a' }}>
+              </div>
+              <div style={{ 
+                fontSize: '16px', 
+                fontWeight: 400, 
+                lineHeight: '1.7', 
+                color: '#1D2129',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
+              }}>
                 Σ(成员日成本) = P5:0.16, P6:0.21, P7:0.26, P8:0.36 万/天
-              </Text>
+              </div>
             </div>
           </Col>
           <Col xs={24} md={12}>
             <div
               style={{
-                padding: 20,
+                padding: '12px 16px',
                 borderRadius: 12,
               }}
             >
-              <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+              <div style={{ 
+                fontSize: '15px', 
+                fontWeight: 500, 
+                lineHeight: '1.6', 
+                color: '#272E3B',
+                marginBottom: 8,
+                fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
+              }}>
                 可消耗天数
-              </Text>
-              <Text strong style={{ fontSize: 18, color: '#0f172a' }}>
+              </div>
+              <div style={{ 
+                fontSize: '16px', 
+                fontWeight: 400, 
+                lineHeight: '1.7', 
+                color: '#1D2129',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
+              }}>
                 可消耗成本 / 日人力成本
-              </Text>
+              </div>
             </div>
           </Col>
           <Col xs={24} md={12}>
             <div
               style={{
-                padding: 20,
+                padding: '12px 16px',
                 borderRadius: 12,
               }}
             >
-              <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+              <div style={{ 
+                fontSize: '15px', 
+                fontWeight: 500, 
+                lineHeight: '1.6', 
+                color: '#272E3B',
+                marginBottom: 8,
+                fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
+              }}>
                 燃尽日期
-              </Text>
-              <Text strong style={{ fontSize: 18, color: '#0f172a' }}>
+              </div>
+              <div style={{ 
+                fontSize: '16px', 
+                fontWeight: 400, 
+                lineHeight: '1.7', 
+                color: '#1D2129',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
+              }}>
                 当前日期 + 可消耗天数
-              </Text>
-            </div>
-          </Col>
-        </Row>
-      </Card>
-
-      {/* 项目基本信息 */}
-      <Card
-        style={{
-          borderRadius: 20,
-          marginBottom: 24,
-          border: '1px solid #f1f5f9',
-        }}
-      >
-        <div style={{ marginBottom: 20 }}>
-          <Title level={4} style={{ marginBottom: 4, fontWeight: 600 }}>
-            <DollarOutlined style={{ marginRight: 8, color: '#8B5CF6' }} />
-            项目基本信息
-          </Title>
-          <Text type="secondary">项目财务数据概览</Text>
-        </div>
-
-        {/* 项目标识信息 */}
-        <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-          <Col xs={24} sm={12} md={8}>
-            <div
-              style={{
-                padding: 16,
-                borderRadius: 12,
-                background: '#ffffff',
-                border: '1px solid #f1f5f9',
-              }}
-            >
-              <Text type="secondary" style={{ fontSize: 12 }}>项目编号</Text>
-              <div style={{ marginTop: 4 }}>
-                <Text strong style={{ fontSize: 16, color: '#0f172a' }}>
-                  {result.projectCode || '-'}
-                </Text>
-              </div>
-            </div>
-          </Col>
-          <Col xs={24} sm={12} md={8}>
-            <div
-              style={{
-                padding: 16,
-                borderRadius: 12,
-                background: '#ffffff',
-                border: '1px solid #f1f5f9',
-              }}
-            >
-              <Text type="secondary" style={{ fontSize: 12 }}>项目名称</Text>
-              <div style={{ marginTop: 4 }}>
-                <Text strong style={{ fontSize: 16, color: '#0f172a' }}>
-                  {result.projectName || '-'}
-                </Text>
-              </div>
-            </div>
-          </Col>
-          <Col xs={24} sm={12} md={8}>
-            <div
-              style={{
-                padding: 16,
-                borderRadius: 12,
-                background: '#ffffff',
-                border: '1px solid #f1f5f9',
-              }}
-            >
-              <Text type="secondary" style={{ fontSize: 12 }}>项目类型</Text>
-              <div style={{ marginTop: 4 }}>
-                <Text strong style={{ fontSize: 16, color: '#0f172a' }}>
-                  {result.projectType || '-'}
-                </Text>
               </div>
             </div>
           </Col>
         </Row>
-
-        {/* 财务数据 */}
-        <Row gutter={[16, 16]}>
-          <Col xs={12} sm={8} md={6}>
-            <div
-              style={{
-                padding: 16,
-                borderRadius: 12,
-                background: '#ffffff',
-                border: '1px solid #f1f5f9',
-                textAlign: 'center',
-              }}
-            >
-              <Text type="secondary" style={{ fontSize: 12 }}>合同金额</Text>
-              <div>
-                <Text strong style={{ fontSize: 20, color: '#0f172a' }}>
-                  {result.contractAmount?.toFixed(2) || '-'}
-                </Text>
-                <Text type="secondary" style={{ fontSize: 12 }}> 万元</Text>
-              </div>
-            </div>
-          </Col>
-          <Col xs={12} sm={8} md={6}>
-            <div
-              style={{
-                padding: 16,
-                borderRadius: 12,
-                background: '#ffffff',
-                border: '1px solid #f1f5f9',
-                textAlign: 'center',
-              }}
-            >
-              <Text type="secondary" style={{ fontSize: 12 }}>售前比例</Text>
-              <div>
-                <Text strong style={{ fontSize: 20, color: '#0f172a' }}>
-                  {result.preSaleRatio ? `${(result.preSaleRatio * 100).toFixed(2)}%` : '-'}
-                </Text>
-              </div>
-            </div>
-          </Col>
-          <Col xs={12} sm={8} md={6}>
-            <div
-              style={{
-                padding: 16,
-                borderRadius: 12,
-                background: '#ffffff',
-                border: '1px solid #f1f5f9',
-                textAlign: 'center',
-              }}
-            >
-              <Text type="secondary" style={{ fontSize: 12 }}>税率</Text>
-              <div>
-                <Text strong style={{ fontSize: 20, color: '#0f172a' }}>
-                  {result.taxRate ? `${(result.taxRate * 100).toFixed(2)}%` : '-'}
-                </Text>
-              </div>
-            </div>
-          </Col>
-          <Col xs={12} sm={8} md={6}>
-            <div
-              style={{
-                padding: 16,
-                borderRadius: 12,
-                background: '#ffffff',
-                border: '1px solid #f1f5f9',
-                textAlign: 'center',
-              }}
-            >
-              <Text type="secondary" style={{ fontSize: 12 }}>外采人力成本</Text>
-              <div>
-                <Text strong style={{ fontSize: 20, color: '#0f172a' }}>
-                  {result.externalLaborCost?.toFixed(2) || '-'}
-                </Text>
-                <Text type="secondary" style={{ fontSize: 12 }}> 万元</Text>
-              </div>
-            </div>
-          </Col>
-          <Col xs={12} sm={8} md={6}>
-            <div
-              style={{
-                padding: 16,
-                borderRadius: 12,
-                background: '#ffffff',
-                border: '1px solid #f1f5f9',
-                textAlign: 'center',
-              }}
-            >
-              <Text type="secondary" style={{ fontSize: 12 }}>外采软件成本</Text>
-              <div>
-                <Text strong style={{ fontSize: 20, color: '#0f172a' }}>
-                  {result.externalSoftwareCost?.toFixed(2) || '-'}
-                </Text>
-                <Text type="secondary" style={{ fontSize: 12 }}> 万元</Text>
-              </div>
-            </div>
-          </Col>
-          <Col xs={12} sm={8} md={6}>
-            <div
-              style={{
-                padding: 16,
-                borderRadius: 12,
-                background: '#ffffff',
-                border: '1px solid #f1f5f9',
-                textAlign: 'center',
-              }}
-            >
-              <Text type="secondary" style={{ fontSize: 12 }}>当前人力成本</Text>
-              <div>
-                <Text strong style={{ fontSize: 20, color: '#0f172a' }}>
-                  {result.currentManpowerCost?.toFixed(2) || '-'}
-                </Text>
-                <Text type="secondary" style={{ fontSize: 12 }}> 万元</Text>
-              </div>
-            </div>
-          </Col>
-        </Row>
-      </Card>
-
-      {/* 项目人员信息展示 */}
-      <Card
-        style={{
-          borderRadius: 20,
-          marginBottom: 24,
-          border: '1px solid #f1f5f9',
-        }}
-      >
-        <div style={{ marginBottom: 20 }}>
-          <Title level={4} style={{ marginBottom: 4, fontWeight: 600 }}>
-            <TeamOutlined style={{ marginRight: 8, color: '#10B981' }} />
-            项目人员信息
-          </Title>
-          <Text type="secondary">当前项目团队成员详情</Text>
-        </div>
-
-        <Table
-          columns={[
-            {
-              title: '姓名',
-              dataIndex: 'name',
-              key: 'name',
-              width: 120,
-              render: (v: string) => <Text strong>{v || '-'}</Text>
-            },
-            {
-              title: '等级',
-              dataIndex: 'level',
-              key: 'level',
-              width: 100,
-              render: (v: string) => (
-                <Tag style={{ borderRadius: 8, background: '#3B82F615', color: '#3B82F6', border: 'none' }}>
-                  {v || '-'}
-                </Tag>
-              )
-            },
-            {
-              title: '日成本(万元)',
-              dataIndex: 'dailyCost',
-              key: 'dailyCost',
-              width: 120,
-              render: (v: number) => v?.toFixed(2) || '-'
-            },
-            {
-              title: '入项时间',
-              dataIndex: 'entryTime',
-              key: 'entryTime',
-              width: 150,
-              render: (v: string) => v ? dayjs(v).format('YYYY-MM-DD') : '-'
-            },
-            {
-              title: '离项时间',
-              dataIndex: 'leaveTime',
-              key: 'leaveTime',
-              width: 150,
-              render: (v: string, r: any) => r.isToEnd ? '至结项' : (v ? dayjs(v).format('YYYY-MM-DD') : '-')
-            },
-          ]}
-          dataSource={result?.teamMembers || []}
-          rowKey="memberId"
-          pagination={false}
-          size="small"
-          locale={{ emptyText: '暂无人员信息' }}
-        />
       </Card>
 
       {/* 人员方案调整区域 */}

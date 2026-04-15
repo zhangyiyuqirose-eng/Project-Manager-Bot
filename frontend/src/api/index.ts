@@ -136,8 +136,8 @@ export const consumptionApi = {
   saveMembers: (projectId: number, members: any[]) =>
     api.post<ApiResponse<any>>(`/consumption/${projectId}/save-members`, { members }),
 
-  calculateCost: (projectId: number) =>
-    api.post<ApiResponse<any>>(`/consumption/${projectId}/calculate`),
+  calculateCost: (projectId: number, members?: any[]) =>
+    api.post<ApiResponse<any>>(`/consumption/${projectId}/calculate`, { members }),
 
   adjustMembers: (projectId: number, members: any[]) =>
     api.post<ApiResponse<any>>(`/consumption/${projectId}/members`, { members }),
