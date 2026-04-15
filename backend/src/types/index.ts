@@ -275,6 +275,20 @@ export interface AdjustMembersRequest {
   members: ProjectMemberInput[]
 }
 
+export interface CalculationDetails {
+  contractAmount: number
+  preSaleRatio: number
+  taxRate: number
+  externalLaborCost: number
+  externalSoftwareCost: number
+  externalCost: number
+  otherCost: number
+  currentManpowerCost: number
+  formula: string
+  formulaValues: string
+  availableCost: number
+}
+
 export interface ConsumptionResult {
   projectId?: number
   projectCode?: string | null
@@ -293,6 +307,7 @@ export interface ConsumptionResult {
   availableDays: number
   burnoutDate: string | null
   members: MemberCostDetail[]
+  calculationDetails?: CalculationDetails
 }
 
 export interface MemberCostDetail {

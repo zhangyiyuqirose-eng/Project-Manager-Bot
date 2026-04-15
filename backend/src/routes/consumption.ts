@@ -84,6 +84,42 @@ const upload = multer({
 // ==================== 路由处理 ====================
 
 /**
+ * POST /ocr - OCR上传识别
+ */
+router.post('/ocr', authMiddleware, upload.array('files', 10), async (req: Request, res: Response) => {
+  try {
+    const files = req.files as Express.Multer.File[]
+    
+    if (!files || files.length === 0) {
+      return sendError(res, 400, '请上传图片文件')
+    }
+
+    // 对第一张图片进行OCR识别
+    const firstFile = files[0]
+    const ocrResult = await performOcrRecognition(firstFile.path)
+
+    // 清理临时文件
+    files.forEach(file => {
+      try {
+        fs.unlinkSync(file.path)
+      } catch (error) {
+        console.error(`清理临时文件失败: ${file.path}`, error)
+      }
+    })
+
+    sendResponse(res, ocrResult, 'OCR识别成功')
+  } catch (error) {
+    console.error('OCR upload error:', error)
+    if (error instanceof Error) {
+      console.error('Error stack:', error.stack)
+      sendError(res, 500, `OCR识别失败: ${error.message}`)
+    } else {
+      sendError(res, 500, 'OCR识别失败，请稍后重试')
+    }
+  }
+})
+
+/**
  * 真实 OCR 识别 - 调用 Qwen/Qwen3-Omni-30B-A3B-Thinking 多模态模型
  */
 const performOcrRecognition = async (filePath: string): Promise<OcrResult> => {
@@ -151,6 +187,86 @@ const calculateCurrentManpowerCost = async (projectId: number): Promise<number> 
 }
 
 /**
+ * 中国法定节假日数据（已公布的年份）
+ * 格式：'YYYY-MM-DD'
+ */
+const CHINESE_HOLIDAYS_2024 = [
+  '2024-01-01', '2024-02-10', '2024-02-11', '2024-02-12', '2024-02-13', '2024-02-14', '2024-02-15', '2024-02-16', '2024-02-17',
+  '2024-04-04', '2024-04-05', '2024-04-06',
+  '2024-05-01', '2024-05-02', '2024-05-03', '2024-05-04', '2024-05-05',
+  '2024-06-08', '2024-06-09', '2024-06-10',
+  '2024-09-15', '2024-09-16', '2024-09-17',
+  '2024-10-01', '2024-10-02', '2024-10-03', '2024-10-04', '2024-10-05', '2024-10-06', '2024-10-07'
+]
+
+const CHINESE_HOLIDAYS_2025 = [
+  '2025-01-01',
+  '2025-01-28', '2025-01-29', '2025-01-30', '2025-01-31', '2025-02-01', '2025-02-02', '2025-02-03', '2025-02-04',
+  '2025-04-04', '2025-04-05', '2025-04-06',
+  '2025-05-01', '2025-05-02', '2025-05-03', '2025-05-04', '2025-05-05',
+  '2025-05-31', '2025-06-01', '2025-06-02',
+  '2025-10-01', '2025-10-02', '2025-10-03', '2025-10-04', '2025-10-05', '2025-10-06', '2025-10-07', '2025-10-08'
+]
+
+const CHINESE_HOLIDAYS_2026 = [
+  '2026-01-01', '2026-01-02', '2026-01-03',
+  '2026-02-17', '2026-02-18', '2026-02-19', '2026-02-20', '2026-02-21', '2026-02-22', '2026-02-23',
+  '2026-04-05', '2026-04-06', '2026-04-07',
+  '2026-05-01', '2026-05-02', '2026-05-03', '2026-05-04',
+  '2026-05-31', '2026-06-01', '2026-06-02',
+  '2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04', '2026-10-05', '2026-10-06', '2026-10-07'
+]
+
+const ALL_HOLIDAYS = new Set([
+  ...CHINESE_HOLIDAYS_2024,
+  ...CHINESE_HOLIDAYS_2025,
+  ...CHINESE_HOLIDAYS_2026
+])
+
+/**
+ * 判断是否是工作日
+ * @param date 日期
+ * @returns 是否是工作日
+ */
+const isWorkingDay = (date: Date): boolean => {
+  const day = dayjs(date)
+  const dayOfWeek = day.day()
+  
+  if (dayOfWeek === 0 || dayOfWeek === 6) {
+    return false
+  }
+  
+  const year = day.year()
+  const dateStr = day.format('YYYY-MM-DD')
+  
+  if (year >= 2027) {
+    return true
+  }
+  
+  return !ALL_HOLIDAYS.has(dateStr)
+}
+
+/**
+ * 计算从某个日期开始，加上N个工作日后的日期
+ * @param startDate 开始日期
+ * @param workingDays 工作日数
+ * @returns 燃尽日期
+ */
+const addWorkingDays = (startDate: Date, workingDays: number): Date => {
+  let currentDate = dayjs(startDate)
+  let remainingDays = workingDays
+  
+  while (remainingDays > 0) {
+    currentDate = currentDate.add(1, 'day')
+    if (isWorkingDay(currentDate.toDate())) {
+      remainingDays--
+    }
+  }
+  
+  return currentDate.toDate()
+}
+
+/**
  * 计算燃尽日期
  */
 const calculateBurnoutDate = (
@@ -163,7 +279,7 @@ const calculateBurnoutDate = (
   }
 
   const availableDays = Math.floor(availableCost / dailyManpowerCost)
-  return dayjs(startDate).add(availableDays, 'day').toDate()
+  return addWorkingDays(startDate, availableDays)
 }
 
 // ==================== 路由定义 ====================
@@ -177,6 +293,10 @@ router.get('/project/:projectCode', authMiddleware, async (req: Request, res: Re
     const { projectCode } = req.params
     const userId = authReq.userId
 
+    console.log('=== 项目编号查询 ===')
+    console.log('项目编号:', projectCode)
+    console.log('用户ID:', userId)
+
     // 查询项目
     const project = await prisma.project.findFirst({
       where: { projectCode: String(projectCode), userId },
@@ -185,6 +305,8 @@ router.get('/project/:projectCode', authMiddleware, async (req: Request, res: Re
         costs: true
       }
     })
+
+    console.log('查询到的项目:', project)
 
     if (!project) {
       return sendError(res, 200, '项目不存在，请补充完整信息后保存')
@@ -737,6 +859,7 @@ router.post('/:projectId/calculate', authMiddleware, async (req: Request, res: R
     const authReq = req as AuthenticatedRequest
     const { projectId } = req.params
     const userId = authReq.userId
+    const { members: reqMembers } = req.body
 
     if (!await verifyProjectOwnership(Number(projectId), userId)) {
       return sendError(res, 403, '无权访问该项目')
@@ -761,22 +884,27 @@ router.post('/:projectId/calculate', authMiddleware, async (req: Request, res: R
       return sendError(res, 400, '请先保存项目成本信息')
     }
 
-    // 获取成员信息 - 包含所有必要字段
-    const members = await prisma.projectMember.findMany({
-      where: { projectId: Number(projectId) },
-      select: {
-        id: true,
-        name: true,
-        department: true,
-        level: true,
-        dailyCost: true,
-        role: true,
-        entryTime: true,
-        leaveTime: true,
-        isToEnd: true,
-        reportedHours: true,
-      }
-    })
+    // 获取成员信息 - 优先使用前端传递的成员数据，否则从数据库获取
+    let members = []
+    if (reqMembers && Array.isArray(reqMembers) && reqMembers.length > 0) {
+      members = reqMembers
+    } else {
+      members = await prisma.projectMember.findMany({
+        where: { projectId: Number(projectId) },
+        select: {
+          id: true,
+          name: true,
+          department: true,
+          level: true,
+          dailyCost: true,
+          role: true,
+          entryTime: true,
+          leaveTime: true,
+          isToEnd: true,
+          reportedHours: true,
+        }
+      })
+    }
 
     if (members.length === 0) {
       return sendError(res, 400, '请先添加项目成员')
@@ -790,23 +918,45 @@ router.post('/:projectId/calculate', authMiddleware, async (req: Request, res: R
     const externalSoftwareCost = projectCost.externalSoftwareCost || 0
     const otherCost = projectCost.otherCost || 0
 
-    // 售前成本
-    const preSaleCost = contractAmount * preSaleRatio
-
-    // 税金
-    const taxCost = contractAmount * taxRate
-
-    // 可用于项目实施的金额（新增 otherCost 减项）
-    const implementationBudget = contractAmount - preSaleCost - taxCost - externalLaborCost - externalSoftwareCost - otherCost
+    // 外采成本 = 外采人力成本 + 外采软件成本
+    const externalCost = externalLaborCost + externalSoftwareCost
 
     // 当前人力成本
-    const currentManpowerCost = await calculateCurrentManpowerCost(Number(projectId))
+    let currentManpowerCost = members.reduce((sum, member) => {
+      if (member.reportedHours) {
+        // 假设每天工作8小时
+        const workingDays = member.reportedHours / 8
+        return sum + workingDays * member.dailyCost
+      }
+      return sum
+    }, 0)
+
+    // 如果计算出来的当前人力成本为0，使用数据库中已有的值
+    if (currentManpowerCost === 0 && projectCost.currentManpowerCost) {
+      currentManpowerCost = projectCost.currentManpowerCost
+      console.log('使用数据库中已有的当前人力成本:', currentManpowerCost)
+    }
 
     // 日人力成本
-    const dailyManpowerCost = await calculateDailyManpowerCost(Number(projectId))
+    const dailyManpowerCost = members.reduce((sum, member) => sum + member.dailyCost, 0)
 
-    // 可消耗成本
-    const availableCost = implementationBudget - currentManpowerCost
+    // 计算过程日志
+    console.log('=== 成本计算过程 ===')
+    console.log('合同金额:', contractAmount)
+    console.log('售前比例:', preSaleRatio)
+    console.log('税率:', taxRate)
+    console.log('外采人力成本:', externalLaborCost)
+    console.log('外采软件成本:', externalSoftwareCost)
+    console.log('外采成本总计:', externalCost)
+    console.log('其他成本:', otherCost)
+    console.log('当前人力成本:', currentManpowerCost)
+    console.log('计算式: 合同金额 × (1 - 售前比例 - 税率) - 外采成本 - 当前人力成本 - 其它成本')
+    console.log('计算式: ', contractAmount, '× (1 -', preSaleRatio, '-', taxRate, ') -', externalCost, '-', currentManpowerCost, '-', otherCost)
+
+    // 可消耗成本 = 合同金额 × (1 - 售前比例 - 税率) - 外采成本 - 当前人力成本 - 其它成本
+    const availableCost = contractAmount * (1 - preSaleRatio - taxRate) - externalCost - currentManpowerCost - otherCost
+
+    console.log('计算结果 - 可消耗成本:', availableCost)
 
     // 可消耗天数（保留整数）
     const availableDays = dailyManpowerCost > 0 ? Math.floor(availableCost / dailyManpowerCost) : 0
@@ -837,22 +987,37 @@ router.post('/:projectId/calculate', authMiddleware, async (req: Request, res: R
       const workingDays = member.reportedHours ? member.reportedHours / 8 : 0
       const totalCost = workingDays * member.dailyCost
       return {
-        id: member.id,
+        id: member.id || 0,
         name: member.name,
-        department: member.department,
+        department: member.department || '',
         level: member.level,
         dailyCost: member.dailyCost,
-        role: member.role,
-        entryTime: member.entryTime?.toISOString() || null,
-        leaveTime: member.leaveTime?.toISOString() || null,
-        isToEnd: member.isToEnd,
-        reportedHours: member.reportedHours,
+        role: member.role || '',
+        entryTime: typeof member.entryTime === 'string' ? member.entryTime : (member.entryTime?.toISOString() || null),
+        leaveTime: typeof member.leaveTime === 'string' ? member.leaveTime : (member.leaveTime?.toISOString() || null),
+        isToEnd: member.isToEnd || false,
+        reportedHours: member.reportedHours || 0,
         totalCost
       }
     })
 
     // 燃尽日期仅返回年月日格式
     const burnoutDateStr = burnoutDate ? dayjs(burnoutDate).format('YYYY-MM-DD') : null
+
+    // 计算过程详细信息
+    const calculationDetails = {
+      contractAmount,
+      preSaleRatio,
+      taxRate,
+      externalLaborCost,
+      externalSoftwareCost,
+      externalCost: externalLaborCost + externalSoftwareCost,
+      otherCost,
+      currentManpowerCost,
+      formula: '合同金额 × (1 - 售前比例 - 税率) - 外采成本 - 当前人力成本 - 其它成本',
+      formulaValues: `${contractAmount} × (1 - ${preSaleRatio} - ${taxRate}) - ${externalLaborCost + externalSoftwareCost} - ${currentManpowerCost} - ${otherCost}`,
+      availableCost
+    }
 
     const response: ConsumptionResult = {
       contractAmount,
@@ -866,7 +1031,8 @@ router.post('/:projectId/calculate', authMiddleware, async (req: Request, res: R
       dailyManpowerCost,
       availableDays,
       burnoutDate: burnoutDateStr,
-      members: memberCostDetails
+      members: memberCostDetails,
+      calculationDetails
     }
 
     sendResponse(res, response, '成本计算成功')
@@ -913,10 +1079,10 @@ router.post('/:projectId/members', authMiddleware, async (req: Request, res: Res
           name: member.name,
           level: member.level,
           dailyCost: member.dailyCost,
-          role: member.role,
+          role: member.role || '',
           entryTime: member.entryTime ? new Date(member.entryTime) : null,
           leaveTime: member.leaveTime ? new Date(member.leaveTime) : null,
-          reportedHours: member.reportedHours
+          reportedHours: member.reportedHours || 0
         }
       })
     }
