@@ -342,9 +342,10 @@ export interface RecognizeResult {
 }
 
 export interface StageInfo {
-  name: string
-  plannedProgress: number
-  actualProgress: number
+  stage: string
+  ratio: number
+  plannedProgress?: number
+  actualProgress?: number
   plannedCost?: number
   actualCost?: number
 }
@@ -362,12 +363,20 @@ export interface CalculateDeviationRequest {
 export interface DeviationResult {
   totalContractAmount: number
   currentCostConsumption: number
+  expectedCostConsumption: number
   taskProgress: number
   costDeviation: number
+  deviationRate: number
   deviationStatus: 'normal' | 'warning' | 'critical'
   baselineType: string
   expectedStages: StageInfo[]
   actualStages: StageInfo[]
+  stageDetails: Array<{
+    stage: string
+    expected: number
+    actual: number
+    deviation: number
+  }>
   teamCosts: TeamCostInfo[]
   aiSuggestion: string | null
 }

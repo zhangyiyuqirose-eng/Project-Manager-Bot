@@ -12,6 +12,8 @@ import {
   Table,
   Tag,
   Progress,
+  Modal,
+  Tooltip,
 } from 'antd'
 import {
   EditOutlined,
@@ -26,6 +28,7 @@ import {
   ProjectOutlined,
   AlertOutlined,
   ThunderboltOutlined,
+  QuestionCircleOutlined,
 } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import { Line, Column } from '@ant-design/charts'
@@ -49,7 +52,7 @@ const stepItems = [
 ]
 
 // 团队列表
-const teamList = ['产品', 'UI', '研发', '测试', '项目管理']
+const teamList = ['产品团队', 'UI团队', '研发团队', '测试团队', '项目管理团队']
 
 // 阶段列表
 const stageList = ['需求', '设计', '开发', '技术测试', '性能测试', '投产']
@@ -65,9 +68,10 @@ interface StatCardProps {
   gradient: string
   status?: 'success' | 'warning' | 'error' | 'normal'
   tagText?: string
+  tooltip?: string
 }
 
-function StatCard({ title, value, suffix, precision, icon, color, gradient, status, tagText }: StatCardProps) {
+function StatCard({ title, value, suffix, precision, icon, color, gradient, status, tagText, tooltip }: StatCardProps) {
   return (
     <Card
       style={{
@@ -83,6 +87,7 @@ function StatCard({ title, value, suffix, precision, icon, color, gradient, stat
           padding: '20px 16px',
           borderRadius: 12,
           marginBottom: 16,
+          position: 'relative',
         }}
       >
         <div
@@ -99,7 +104,14 @@ function StatCard({ title, value, suffix, precision, icon, color, gradient, stat
         >
           <span style={{ fontSize: 22, color: '#fff' }}>{icon}</span>
         </div>
-        <Text style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: 12 }}>{title}</Text>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: 12 }}>{title}</Text>
+          {tooltip && (
+            <Tooltip title={tooltip} placement="top">
+              <InfoCircleOutlined style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: 14, cursor: 'pointer' }} />
+            </Tooltip>
+          )}
+        </div>
       </div>
       <div style={{ textAlign: 'center' }}>
         <Text
@@ -139,13 +151,17 @@ export default function CostDeviationResult() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const projectId = searchParams.get('projectId')
+  const expectedProfit = parseFloat(searchParams.get('expectedProfit') || '20')
 
   const [currentStep] = useState(1)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(true)// 导出状态
   const [exporting, setExporting] = useState(false)
 
   // 结果数据
   const [result, setResult] = useState<CostDeviation | null>(null)
+
+  // 公式弹窗状态
+  const [formulaModalVisible, setFormulaModalVisible] = useState(false)
 
   // 加载结果数据
   useEffect(() => {
@@ -160,9 +176,11 @@ export default function CostDeviationResult() {
       try {
         const response = await deviationApi.getResult(Number(projectId))
         if (response.data.code === 0 || response.data.code === 200) {
+          console.log('偏差分析结果数据:', response.data.data)
           setResult(response.data.data)
         }
-      } catch {
+      } catch (error) {
+        console.error('获取结果数据失败:', error)
         message.error('获取结果数据失败')
       } finally {
         setLoading(false)
@@ -218,7 +236,7 @@ export default function CostDeviationResult() {
       },
       {
         type: '预期消耗',
-        value: (result?.totalContractAmount || 0) * (result?.taskProgress || 0) / 100,
+        value: (result?.totalContractAmount || 0) * (1 - expectedProfit / 100) * (result?.taskProgress || 0) / 100,
       },
       {
         type: '任务进度',
@@ -239,6 +257,7 @@ export default function CostDeviationResult() {
         fontSize: 12,
       },
       formatter: ({ type, value }: { type: string; value: number }) => {
+        if (typeof value !== 'number') return '-'
         if (type === '任务进度') return `${value.toFixed(1)}%`
         return `${value.toFixed(2)}万`
       },
@@ -252,47 +271,113 @@ export default function CostDeviationResult() {
     },
   }
 
+  // 定义固定的项目阶段
+  const projectStages = ['需求', '设计', '开发', '技术测试', '性能测试', '投产']
+  
+  // 计算总成本，用于计算占比
+  const totalActualCost = result?.actualStages?.reduce((sum, stage) => sum + (stage.actualCost || 0), 0) || 0
+  const totalExpectedCost = result?.expectedStages?.reduce((sum, stage) => sum + (stage.plannedCost || 0), 0) || 0
+  
   // 各阶段成本偏差折线图配置
   const stageLineConfig = {
     data: [
-      ...(result?.expectedStages?.map((item) => ({
-        stage: item.stage,
-        type: '预期占比',
-        value: item.expectedRatio * 100,
-      })) || stageList.map((stage, index) => ({
-        stage,
-        type: '预期占比',
-        value: [15, 20, 35, 15, 5, 10][index],
-      }))),
-      ...(result?.actualStages?.map((item) => ({
-        stage: item.stage,
-        type: '实际占比',
-        value: item.actualRatio * 100,
-      })) || []),
+      // 实际成本占比（蓝色）
+      ...projectStages.map((stage) => {
+        const actualStage = result?.actualStages?.find(s => s.stage === stage)
+        const actualCost = actualStage?.actualCost || 0
+        const actualRatio = totalActualCost > 0 ? actualCost / totalActualCost : 0
+        return {
+          stage,
+          type: '实际成本占比',
+          value: actualRatio * 100,
+          actualCost,
+        }
+      }),
+      // 预期成本占比（红色）
+      ...projectStages.map((stage, index) => {
+        const expectedStage = result?.expectedStages?.find(s => s.stage === stage)
+        const expectedCost = expectedStage?.plannedCost || 0
+        const expectedRatio = totalExpectedCost > 0 ? expectedCost / totalExpectedCost : [0.15, 0.2, 0.35, 0.15, 0.05, 0.1][index]
+        return {
+          stage,
+          type: '预期成本占比',
+          value: expectedRatio * 100,
+        }
+      }),
     ],
     xField: 'stage',
     yField: 'value',
     seriesField: 'type',
     color: ['#3B82F6', '#EF4444'],
     legend: {
-      position: 'top' as const,
+      position: 'bottom' as const,
+      align: 'center' as const,
     },
     smooth: true,
     point: {
-      size: 4,
-      shape: 'circle',
+      size: 6,
+      shape: (datum: any) => datum.type === '实际成本占比' ? 'circle' : 'square',
     },
     label: {
       position: 'top' as const,
       style: {
         fontSize: 10,
       },
-      formatter: ({ value }: { value: number }) => `${value.toFixed(1)}%`,
+      formatter: ({ value }: { value: number }) => typeof value === 'number' ? `${value.toFixed(1)}%` : '-',
     },
     meta: {
       stage: { alias: '阶段' },
       value: { alias: '占比(%)' },
       type: { alias: '类型' },
+    },
+    lineStyle: (datum: any) => {
+      return {
+        stroke: datum.type === '实际成本占比' ? '#3B82F6' : '#EF4444',
+        lineWidth: 2,
+        type: datum.type === '实际成本占比' ? 'solid' : 'dashed',
+      }
+    },
+    tooltip: {
+          trigger: 'axis' as const,
+          formatter: (datum: any[]) => {
+            if (!datum || datum.length === 0) return ''
+            const stage = datum[0]?.data?.stage || ''
+            const actualDatum = datum.find(d => d.seriesName === '实际成本占比')
+            const expectedDatum = datum.find(d => d.seriesName === '预期成本占比')
+            const actualCost = actualDatum?.data?.actualCost || 0
+            const actualRatio = actualDatum?.value || 0
+            const expectedRatio = expectedDatum?.value || 0
+            
+            // 找到对应阶段的预期成本
+            const expectedStage = result?.expectedStages?.find(s => s.stage === stage)
+            const expectedCost = expectedStage?.plannedCost || 0
+            
+            return (
+              <div style={{ padding: 12, backgroundColor: 'white', borderRadius: 8, boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}>
+                <div style={{ marginBottom: 8, fontWeight: 'bold', color: '#1E293B' }}>当前阶段: {stage}</div>
+                <div style={{ marginBottom: 4, color: '#3B82F6' }}>
+                  实际成本: {typeof actualCost === 'number' ? actualCost.toFixed(2) : '0.00'}万
+                </div>
+                <div style={{ marginBottom: 4, color: '#3B82F6' }}>
+                  占比: {typeof actualRatio === 'number' ? actualRatio.toFixed(2) : '0.00'}%
+                </div>
+                <div style={{ marginBottom: 4, color: '#EF4444' }}>
+                  预期成本: {typeof expectedCost === 'number' ? expectedCost.toFixed(2) : '0.00'}万
+                </div>
+                <div style={{ color: '#EF4444' }}>
+                  占比: {typeof expectedRatio === 'number' ? expectedRatio.toFixed(2) : '0.00'}%
+                </div>
+              </div>
+            )
+          },
+        },
+    yAxis: {
+      min: 0,
+      max: 100,
+      tickCount: 6,
+      label: {
+        formatter: (value: number) => `${value}%`,
+      },
     },
   }
 
@@ -303,7 +388,7 @@ export default function CostDeviationResult() {
         {
           team: item.team,
           type: '预期成本',
-          value: item.expectedCost,
+          value: item.plannedCost,
         },
         {
           team: item.team,
@@ -336,7 +421,7 @@ export default function CostDeviationResult() {
       style: {
         fontSize: 10,
       },
-      formatter: ({ value }: { value: number }) => `${value.toFixed(2)}万`,
+      formatter: ({ value }: { value: number }) => typeof value === 'number' ? `${value.toFixed(2)}万` : '-',
     },
     meta: {
       team: { alias: '团队' },
@@ -360,58 +445,62 @@ export default function CostDeviationResult() {
       ),
     },
     {
-      title: '预期成本(万)',
-      dataIndex: 'expectedCost',
-      key: 'expectedCost',
+      title: '预期成本(万元)',
+      dataIndex: 'plannedCost',
+      key: 'plannedCost',
       width: 110,
       render: (value: number) => (
-        <Text style={{ color: '#3B82F6' }}>{value?.toFixed(2) || '-'}</Text>
+        <Text style={{ color: '#3B82F6' }}>{typeof value === 'number' ? value.toFixed(2) : '-'}</Text>
       ),
     },
     {
       title: '预期占比',
-      dataIndex: 'expectedRatio',
+      dataIndex: 'ratio',
       key: 'expectedRatio',
       width: 100,
       render: (value: number) => (
         <Progress
-          percent={(value || 0) * 100}
+          percent={value || 0}
           size="small"
           strokeColor="#3B82F6"
-          format={(percent) => `${percent?.toFixed(1)}%`}
+          format={(percent) => typeof percent === 'number' ? `${percent.toFixed(1)}%` : '-'}
         />
       ),
     },
     {
-      title: '实际成本(万)',
+      title: '实际成本(万元)',
       dataIndex: 'actualCost',
       key: 'actualCost',
       width: 110,
       render: (value: number) => (
-        <Text style={{ color: '#EF4444' }}>{value?.toFixed(2) || '-'}</Text>
+        <Text style={{ color: '#EF4444' }}>{typeof value === 'number' ? value.toFixed(2) : '-'}</Text>
       ),
     },
     {
       title: '实际占比',
-      dataIndex: 'actualRatio',
       key: 'actualRatio',
       width: 100,
-      render: (value: number) => (
-        <Progress
-          percent={(value || 0) * 100}
-          size="small"
-          strokeColor="#EF4444"
-          format={(percent) => `${percent?.toFixed(1)}%`}
-        />
-      ),
+      render: (_: any, record: StageCost) => {
+        const actualRatio = totalActualCost > 0 ? (record.actualCost || 0) / totalActualCost : 0
+        return (
+          <Progress
+            percent={actualRatio * 100}
+            size="small"
+            strokeColor="#EF4444"
+            format={(percent) => typeof percent === 'number' ? `${percent.toFixed(1)}%` : '-'}
+          />
+        )
+      },
     },
     {
       title: '偏差',
-      dataIndex: 'deviation',
       key: 'deviation',
       width: 100,
-      render: (value: number) => {
-        const status = getDeviationStatus(value || 0)
+      render: (_: any, record: StageCost) => {
+        const actualRatio = totalActualCost > 0 ? (record.actualCost || 0) / totalActualCost : 0
+        const expectedRatio = (record.ratio || 0) / 100 // 转换为小数
+        const deviation = (actualRatio - expectedRatio) * 100
+        const status = getDeviationStatus(deviation)
         return (
           <Tag
             style={{
@@ -421,7 +510,7 @@ export default function CostDeviationResult() {
               border: 'none',
             }}
           >
-            {value?.toFixed(1)}%
+            {typeof deviation === 'number' ? deviation.toFixed(1) : '-'}%
           </Tag>
         )
       },
@@ -440,27 +529,61 @@ export default function CostDeviationResult() {
       ),
     },
     {
-      title: '预期成本(万)',
-      dataIndex: 'expectedCost',
-      key: 'expectedCost',
+      title: '预期成本(万元)',
+      dataIndex: 'plannedCost',
+      key: 'plannedCost',
       width: 120,
       render: (value: number) => (
-        <Text style={{ color: '#3B82F6' }}>{value?.toFixed(2) || '-'}</Text>
+        <Text style={{ color: '#3B82F6' }}>{typeof value === 'number' ? value.toFixed(2) : '-'}</Text>
       ),
     },
     {
-      title: '实际成本(万)',
+      title: '预期占比',
+      key: 'expectedRatio',
+      width: 100,
+      render: (_: any, record: TeamCost) => {
+        const totalExpectedCost = result?.teamCosts?.reduce((sum, team) => sum + (team.plannedCost || 0), 0) || 0
+        const expectedRatio = totalExpectedCost > 0 ? (record.plannedCost || 0) / totalExpectedCost : 0
+        return (
+          <Progress
+            percent={expectedRatio * 100}
+            size="small"
+            strokeColor="#3B82F6"
+            format={(percent) => typeof percent === 'number' ? `${percent.toFixed(1)}%` : '-'}
+          />
+        )
+      },
+    },
+    {
+      title: '实际成本(万元)',
       dataIndex: 'actualCost',
       key: 'actualCost',
       width: 120,
       render: (value: number) => (
-        <Text style={{ color: '#EF4444' }}>{value?.toFixed(2) || '-'}</Text>
+        <Text style={{ color: '#EF4444' }}>{typeof value === 'number' ? value.toFixed(2) : '-'}</Text>
       ),
     },
     {
+      title: '实际占比',
+      key: 'actualRatio',
+      width: 100,
+      render: (_: any, record: TeamCost) => {
+        const totalActualCost = result?.teamCosts?.reduce((sum, team) => sum + (team.actualCost || 0), 0) || 0
+        const actualRatio = totalActualCost > 0 ? (record.actualCost || 0) / totalActualCost : 0
+        return (
+          <Progress
+            percent={actualRatio * 100}
+            size="small"
+            strokeColor="#EF4444"
+            format={(percent) => typeof percent === 'number' ? `${percent.toFixed(1)}%` : '-'}
+          />
+        )
+      },
+    },
+    {
       title: '偏差',
-      dataIndex: 'deviation',
-      key: 'deviation',
+      dataIndex: 'deviationRate',
+      key: 'deviationRate',
       width: 100,
       render: (value: number) => {
         const status = getDeviationStatus(value || 0)
@@ -473,7 +596,7 @@ export default function CostDeviationResult() {
               border: 'none',
             }}
           >
-            {value?.toFixed(1)}%
+            {typeof value === 'number' ? value.toFixed(1) : '-'}%
           </Tag>
         )
       },
@@ -583,8 +706,18 @@ export default function CostDeviationResult() {
       </div>
 
       {/* 核心指标卡片 */}
-      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-        <Col xs={12} sm={6}>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'stretch',
+          gap: 12,
+          marginBottom: 24,
+          padding: '0 16px',
+          flexWrap: 'wrap',
+        }}
+      >
+        <div style={{ width: 'calc(20% - 10px)', minWidth: '150px' }}>
           <StatCard
             title="合同金额"
             value={result.totalContractAmount}
@@ -594,8 +727,8 @@ export default function CostDeviationResult() {
             color="#3B82F6"
             gradient="linear-gradient(135deg, #3B82F6 0%, #60A5FA 100%)"
           />
-        </Col>
-        <Col xs={12} sm={6}>
+        </div>
+        <div style={{ width: 'calc(20% - 10px)', minWidth: '150px' }}>
           <StatCard
             title="成本消耗"
             value={result.currentCostConsumption}
@@ -605,8 +738,8 @@ export default function CostDeviationResult() {
             color="#EF4444"
             gradient="linear-gradient(135deg, #EF4444 0%, #F87171 100%)"
           />
-        </Col>
-        <Col xs={12} sm={6}>
+        </div>
+        <div style={{ width: 'calc(20% - 10px)', minWidth: '150px' }}>
           <StatCard
             title="任务进度"
             value={result.taskProgress}
@@ -616,8 +749,61 @@ export default function CostDeviationResult() {
             color="#10B981"
             gradient="linear-gradient(135deg, #10B981 0%, #34D399 100%)"
           />
-        </Col>
-        <Col xs={12} sm={6}>
+        </div>
+        <div style={{ width: 'calc(20% - 10px)', minWidth: '150px' }}>
+          <Card
+            style={{
+              borderRadius: 16,
+              border: '1px solid #f1f5f9',
+              height: '100%',
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              style={{
+                background: 'linear-gradient(135deg, #8B5CF6 0%, #A78BFA 100%)',
+                padding: '20px 16px',
+                borderRadius: 12,
+                marginBottom: 16,
+              }}
+            >
+              <div
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 12,
+                  background: 'rgba(255, 255, 255, 0.2)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginBottom: 8,
+                }}
+              >
+                <span style={{ fontSize: 22, color: '#fff' }}><ThunderboltOutlined /></span>
+              </div>
+              <Text style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: 12 }}>预期利润</Text>
+            </div>
+            <div style={{ textAlign: 'center' }}>
+              <Text
+                strong
+                style={{
+                  fontSize: 28,
+                  color: '#8B5CF6',
+                  fontWeight: 700,
+                }}
+              >
+                {typeof expectedProfit === 'number' ? expectedProfit.toFixed(1) : expectedProfit}
+              </Text>
+              <Text type="secondary" style={{ fontSize: 13, marginLeft: 4 }}>%</Text>
+              <div style={{ marginTop: 8 }}>
+                <Text style={{ color: '#8B5CF6', fontSize: 14 }}>
+                  利润金额: {typeof result.totalContractAmount === 'number' && typeof expectedProfit === 'number' ? (result.totalContractAmount * expectedProfit / 100).toFixed(2) : '0.00'} 万元
+                </Text>
+              </div>
+            </div>
+          </Card>
+        </div>
+        <div style={{ width: 'calc(20% - 10px)', minWidth: '150px' }}>
           <StatCard
             title="成本偏差"
             value={result.costDeviation}
@@ -628,9 +814,27 @@ export default function CostDeviationResult() {
             gradient="linear-gradient(135deg, #8B5CF6 0%, #A78BFA 100%)"
             status={deviationStatus.status}
             tagText={deviationStatus.text}
+            tooltip="成本偏差 = 成本消耗/(合同金额*(1-利润空间)) - 任务进度"
           />
-        </Col>
-      </Row>
+        </div>
+        <style jsx>{`
+          @media (max-width: 1440px) {
+            div[style*="calc(20% - 10px)"] {
+              width: calc(25% - 9px);
+            }
+          }
+          @media (max-width: 992px) {
+            div[style*="calc(20% - 10px)"] {
+              width: calc(50% - 6px);
+            }
+          }
+          @media (max-width: 576px) {
+            div[style*="calc(20% - 10px)"] {
+              width: 100%;
+            }
+          }
+        `}</style>
+      </div>
 
       {/* 偏差预警提示 */}
       {result.costDeviation > 15 && (
@@ -659,7 +863,7 @@ export default function CostDeviationResult() {
             <div>
               <Text strong style={{ fontSize: 16, color: '#EF4444' }}>成本偏差预警</Text>
               <br />
-              <Text type="secondary">当前成本偏差 {result.costDeviation.toFixed(1)}% 已超过15%阈值，建议立即采取措施控制成本</Text>
+              <Text type="secondary">当前成本偏差 {typeof result.costDeviation === 'number' ? result.costDeviation.toFixed(1) : '0.0'}% 已超过15%阈值，建议立即采取措施控制成本</Text>
             </div>
           </div>
         </Card>
@@ -690,7 +894,7 @@ export default function CostDeviationResult() {
             <div>
               <Text strong style={{ fontSize: 16, color: '#F59E0B' }}>成本偏差提醒</Text>
               <br />
-              <Text type="secondary">当前成本偏差 {result.costDeviation.toFixed(1)}% 处于轻度偏差范围，请关注成本控制</Text>
+              <Text type="secondary">当前成本偏差 {typeof result.costDeviation === 'number' ? result.costDeviation.toFixed(1) : '0.0'}% 处于轻度偏差范围，请关注成本控制</Text>
             </div>
           </div>
         </Card>
@@ -745,6 +949,70 @@ export default function CostDeviationResult() {
         <Column {...progressComparisonConfig} height={200} />
       </Card>
 
+      {/* 各阶段成本对比 */}
+      <Card
+        style={{
+          borderRadius: 20,
+          marginBottom: 24,
+          border: '1px solid #f1f5f9',
+        }}
+      >
+        <div style={{ marginBottom: 16 }}>
+          <Title level={4} style={{ marginBottom: 4, fontWeight: 600 }}>
+            <BarChartOutlined style={{ marginRight: 8, color: '#3B82F6' }} />
+            各阶段成本对比
+          </Title>
+          <Text type="secondary">各阶段的预期成本与实际成本对比</Text>
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginBottom: 24 }}>
+          {result.actualStages?.map((stage) => {
+            // 计算实际占比和预期占比
+            const actualRatio = totalActualCost > 0 ? (stage.actualCost || 0) / totalActualCost : 0
+            const expectedRatio = (stage.ratio || 0) / 100 // 转换为小数
+            // 计算偏差：实际占比 - 预期占比
+            const deviation = (actualRatio - expectedRatio) * 100
+            const status = getDeviationStatus(deviation)
+            return (
+              <Card
+                key={stage.stage}
+                style={{
+                  flex: '1 1 200px',
+                  minWidth: '200px',
+                  borderRadius: 12,
+                  border: '1px solid #f1f5f9',
+                }}
+              >
+                <div style={{ textAlign: 'center', marginBottom: 12 }}>
+                  <Text strong style={{ fontSize: 16, color: '#0f172a' }}>{stage.stage}</Text>
+                </div>
+                <div style={{ marginBottom: 8 }}>
+                  <Text type="secondary" style={{ fontSize: 12 }}>预期：</Text>
+                  <Text style={{ color: '#3B82F6' }}>{typeof stage.plannedCost === 'number' ? stage.plannedCost.toFixed(2) : '0.00'}万</Text>
+                </div>
+                <div style={{ marginBottom: 8 }}>
+                  <Text type="secondary" style={{ fontSize: 12 }}>实际：</Text>
+                  <Text style={{ color: '#EF4444' }}>{typeof stage.actualCost === 'number' ? stage.actualCost.toFixed(2) : '0.00'}万</Text>
+                </div>
+                <div>
+                  <Text type="secondary" style={{ fontSize: 12 }}>偏差：</Text>
+                  <Tag
+                    style={{
+                      borderRadius: 6,
+                      background: `${status.color}15`,
+                      color: status.color,
+                      border: 'none',
+                      fontSize: 12,
+                    }}
+                  >
+                    {deviation > 0 ? '+' : ''}{typeof deviation === 'number' ? deviation.toFixed(1) : '0.0'}%
+                  </Tag>
+                </div>
+              </Card>
+            )
+          })}
+        </div>
+      </Card>
+
       {/* 各阶段成本偏差折线图 */}
       <Card
         style={{
@@ -774,11 +1042,22 @@ export default function CostDeviationResult() {
               }
               style={{ borderRadius: 12, border: '1px solid #f1f5f9' }}
             >
-              {result.actualStages?.map((stage) => {
-                const status = getDeviationStatus(stage.deviation)
+              {projectStages.map((stage) => {
+                // 找到对应阶段的实际和预期数据
+                const actualStage = result.actualStages?.find(s => s.stage === stage)
+                const expectedStage = result.expectedStages?.find(s => s.stage === stage)
+                
+                // 计算实际占比和预期占比
+                const actualRatio = totalActualCost > 0 ? (actualStage?.actualCost || 0) / totalActualCost : 0
+                const expectedRatio = totalExpectedCost > 0 ? (expectedStage?.plannedCost || 0) / totalExpectedCost : [0.15, 0.2, 0.35, 0.15, 0.05, 0.1][projectStages.indexOf(stage)]
+                
+                // 计算偏差：实际占比 - 预期占比
+                const deviation = (actualRatio - expectedRatio) * 100
+                const status = getDeviationStatus(deviation)
+                
                 return (
                   <div
-                    key={stage.stage}
+                    key={stage}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
@@ -787,7 +1066,7 @@ export default function CostDeviationResult() {
                       borderBottom: '1px solid #f1f5f9',
                     }}
                   >
-                    <Text style={{ fontWeight: 500 }}>{stage.stage}</Text>
+                    <Text style={{ fontWeight: 500 }}>{stage}</Text>
                     <Tag
                       style={{
                         borderRadius: 8,
@@ -796,7 +1075,7 @@ export default function CostDeviationResult() {
                         border: 'none',
                       }}
                     >
-                      偏差 {stage.deviation.toFixed(1)}%
+                      偏差 {typeof deviation === 'number' ? deviation.toFixed(1) : '0.0'}%
                     </Tag>
                   </div>
                 )
@@ -804,6 +1083,65 @@ export default function CostDeviationResult() {
             </Card>
           </Col>
         </Row>
+      </Card>
+
+      {/* 各团队成本对比 */}
+      <Card
+        style={{
+          borderRadius: 20,
+          marginBottom: 24,
+          border: '1px solid #f1f5f9',
+        }}
+      >
+        <div style={{ marginBottom: 16 }}>
+          <Title level={4} style={{ marginBottom: 4, fontWeight: 600 }}>
+            <ProjectOutlined style={{ marginRight: 8, color: '#F59E0B' }} />
+            各团队成本对比
+          </Title>
+          <Text type="secondary">各团队的预期成本与实际成本对比</Text>
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginBottom: 24 }}>
+          {result.teamCosts?.map((team) => {
+            const status = getDeviationStatus(team.deviationRate)
+            return (
+              <Card
+                key={team.team}
+                style={{
+                  flex: '1 1 200px',
+                  minWidth: '200px',
+                  borderRadius: 12,
+                  border: '1px solid #f1f5f9',
+                }}
+              >
+                <div style={{ textAlign: 'center', marginBottom: 12 }}>
+                  <Text strong style={{ fontSize: 16, color: '#0f172a' }}>{team.team}</Text>
+                </div>
+                <div style={{ marginBottom: 8 }}>
+                  <Text type="secondary" style={{ fontSize: 12 }}>预期：</Text>
+                  <Text style={{ color: '#3B82F6' }}>{typeof team.plannedCost === 'number' ? team.plannedCost.toFixed(2) : '0.00'}万</Text>
+                </div>
+                <div style={{ marginBottom: 8 }}>
+                  <Text type="secondary" style={{ fontSize: 12 }}>实际：</Text>
+                  <Text style={{ color: '#EF4444' }}>{typeof team.actualCost === 'number' ? team.actualCost.toFixed(2) : '0.00'}万</Text>
+                </div>
+                <div>
+                  <Text type="secondary" style={{ fontSize: 12 }}>偏差：</Text>
+                  <Tag
+                    style={{
+                      borderRadius: 6,
+                      background: `${status.color}15`,
+                      color: status.color,
+                      border: 'none',
+                      fontSize: 12,
+                    }}
+                  >
+                    {typeof team.deviationRate === 'number' ? team.deviationRate.toFixed(1) : '0.0'}%
+                  </Tag>
+                </div>
+              </Card>
+            )
+          })}
+        </div>
       </Card>
 
       {/* 各团队成本双柱形图 */}
@@ -836,7 +1174,7 @@ export default function CostDeviationResult() {
               style={{ borderRadius: 12, border: '1px solid #f1f5f9' }}
             >
               {result.teamCosts?.map((team) => {
-                const status = getDeviationStatus(team.deviation)
+                const status = getDeviationStatus(team.deviationRate)
                 return (
                   <div
                     key={team.team}
@@ -857,7 +1195,7 @@ export default function CostDeviationResult() {
                         border: 'none',
                       }}
                     >
-                      偏差 {team.deviation.toFixed(1)}%
+                      偏差 {typeof team.deviationRate === 'number' ? team.deviationRate.toFixed(1) : '0.0'}%
                     </Tag>
                   </div>
                 )
@@ -879,7 +1217,7 @@ export default function CostDeviationResult() {
           <div style={{ marginBottom: 16 }}>
             <Title level={4} style={{ marginBottom: 4, fontWeight: 600 }}>
               <ThunderboltOutlined style={{ marginRight: 8, color: '#8B5CF6' }} />
-              AI人员调整建议
+              AI调整建议
             </Title>
             <Text type="secondary">基于成本偏差分析，AI智能生成的优化建议</Text>
           </div>
@@ -889,11 +1227,46 @@ export default function CostDeviationResult() {
               borderRadius: 12,
               background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(236, 72, 153, 0.1) 100%)',
               border: '1px solid rgba(139, 92, 246, 0.3)',
+              maxHeight: 400,
+              overflow: 'auto'
             }}
           >
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
               <InfoCircleOutlined style={{ color: '#8B5CF6', fontSize: 18, marginTop: 2 }} />
-              <Text style={{ color: '#475569', lineHeight: 1.6 }}>{result.aiSuggestion}</Text>
+              <div style={{ flex: 1 }}>
+                {result.aiSuggestion.split('\n\n').map((section, index) => {
+                  if (!section.trim()) return null
+                  
+                  const lines = section.split('\n')
+                  const title = lines[0]
+                  const content = lines.slice(1).filter(line => line.trim())
+                  
+                  return (
+                    <div key={index} style={{ marginBottom: 20 }}>
+                      <h5 style={{ 
+                        marginBottom: 10, 
+                        color: '#8B5CF6', 
+                        fontWeight: 600,
+                        fontSize: 14
+                      }}>
+                        {title}
+                      </h5>
+                      <ul style={{ 
+                        margin: 0, 
+                        paddingLeft: 20,
+                        lineHeight: 1.6,
+                        color: '#475569'
+                      }}>
+                        {content.map((line, lineIndex) => (
+                          <li key={lineIndex} style={{ marginBottom: 6 }}>
+                            {line}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )
+                })}
+              </div>
             </div>
           </Card>
         </Card>
@@ -907,12 +1280,25 @@ export default function CostDeviationResult() {
           border: '1px solid #f1f5f9',
         }}
       >
-        <div style={{ marginBottom: 16 }}>
+        <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Title level={4} style={{ marginBottom: 4, fontWeight: 600 }}>
             <DollarOutlined style={{ marginRight: 8, color: '#10B981' }} />
             详细成本分析
           </Title>
-          <Text type="secondary">各阶段与团队的成本偏差详细数据</Text>
+          <Button
+            type="primary"
+            size="small"
+            icon={<QuestionCircleOutlined />}
+            onClick={() => setFormulaModalVisible(true)}
+            style={{ 
+              borderRadius: 8,
+              background: 'linear-gradient(135deg, #8B5CF6 0%, #EC4899 100%)',
+              border: 'none'
+            }}
+          >
+            查看成本计算公式
+          </Button>
+          <Text type="secondary" style={{ flex: 1, marginLeft: 16 }}>各阶段与团队的成本偏差详细数据</Text>
         </div>
 
         <Row gutter={[24, 24]}>
@@ -991,6 +1377,93 @@ export default function CostDeviationResult() {
           </Button>
         </div>
       </Card>
+
+      {/* 成本计算公式弹窗 */}
+      <Modal
+        title="成本计算公式"
+        open={formulaModalVisible}
+        onCancel={() => setFormulaModalVisible(false)}
+        footer={[
+          <Button key="close" type="primary" onClick={() => setFormulaModalVisible(false)}>
+            关闭
+          </Button>
+        ]}
+        width={800}
+      >
+        <div style={{ padding: '0 16px' }}>
+          <h3 style={{ marginBottom: 16, color: '#1E293B' }}>偏差分析</h3>
+          
+          <h4 style={{ marginBottom: 12, color: '#334155' }}>各阶段成本偏差分析</h4>
+          
+          <div style={{ marginBottom: 16, padding: '12px', backgroundColor: '#F8FAFC', borderRadius: 8 }}>
+            <h5 style={{ marginBottom: 8, color: '#475569' }}>需求</h5>
+            <p style={{ marginBottom: 4, color: '#64748B' }}>预期成本 = 合同金额（1-利润空间）*DevOps进度/100 * 需求阶段基准比例</p>
+            <p style={{ color: '#64748B' }}>实际成本 = 产品经理角色成本</p>
+          </div>
+          
+          <div style={{ marginBottom: 16, padding: '12px', backgroundColor: '#F8FAFC', borderRadius: 8 }}>
+            <h5 style={{ marginBottom: 8, color: '#475569' }}>设计</h5>
+            <p style={{ marginBottom: 4, color: '#64748B' }}>预期成本 = 合同金额（1-利润空间）*DevOps进度/100 * 设计阶段基准比例</p>
+            <p style={{ color: '#64748B' }}>实际成本 = UI设计成本 + (开发工程师成本 + 技术经理成本) × 0.3</p>
+          </div>
+          
+          <div style={{ marginBottom: 16, padding: '12px', backgroundColor: '#F8FAFC', borderRadius: 8 }}>
+            <h5 style={{ marginBottom: 8, color: '#475569' }}>研发</h5>
+            <p style={{ marginBottom: 4, color: '#64748B' }}>预期成本 = 合同金额（1-利润空间）*DevOps进度/100 * 研发阶段比例基准比例</p>
+            <p style={{ color: '#64748B' }}>实际成本 = (开发工程师成本 + 技术经理成本) × 0.7</p>
+          </div>
+          
+          <div style={{ marginBottom: 16, padding: '12px', backgroundColor: '#F8FAFC', borderRadius: 8 }}>
+            <h5 style={{ marginBottom: 8, color: '#475569' }}>技术测试</h5>
+            <p style={{ marginBottom: 4, color: '#64748B' }}>预期成本 = 合同金额（1-利润空间）*DevOps进度/100 * 技术测试阶段基准比例</p>
+            <p style={{ color: '#64748B' }}>实际成本 = 测试工程师成本 × 0.7</p>
+          </div>
+          
+          <div style={{ marginBottom: 16, padding: '12px', backgroundColor: '#F8FAFC', borderRadius: 8 }}>
+            <h5 style={{ marginBottom: 8, color: '#475569' }}>性能测试</h5>
+            <p style={{ marginBottom: 4, color: '#64748B' }}>预期成本 = 合同金额（1-利润空间）*DevOps进度/100 * 性能测试阶段基准比例</p>
+            <p style={{ color: '#64748B' }}>实际成本 = 测试工程师成本 × 0.3</p>
+          </div>
+          
+          <div style={{ marginBottom: 24, padding: '12px', backgroundColor: '#F8FAFC', borderRadius: 8 }}>
+            <h5 style={{ marginBottom: 8, color: '#475569' }}>投产</h5>
+            <p style={{ marginBottom: 4, color: '#64748B' }}>预期成本 = 合同金额（1-利润空间）*DevOps进度/100 * 投产阶段基准比例</p>
+            <p style={{ color: '#64748B' }}>实际成本 = (项目经理+项目负责人)成本</p>
+          </div>
+          
+          <h4 style={{ marginBottom: 12, color: '#334155' }}>各团队成本偏差分析</h4>
+          
+          <div style={{ marginBottom: 16, padding: '12px', backgroundColor: '#F8FAFC', borderRadius: 8 }}>
+            <h5 style={{ marginBottom: 8, color: '#475569' }}>产品团队</h5>
+            <p style={{ marginBottom: 4, color: '#64748B' }}>预期成本 = 预期"需求"阶段成本</p>
+            <p style={{ color: '#64748B' }}>实际成本 = ∑产品经理角色成本</p>
+          </div>
+          
+          <div style={{ marginBottom: 16, padding: '12px', backgroundColor: '#F8FAFC', borderRadius: 8 }}>
+            <h5 style={{ marginBottom: 8, color: '#475569' }}>项目管理团队</h5>
+            <p style={{ marginBottom: 4, color: '#64748B' }}>预期成本 = 预期"投产"阶段成本</p>
+            <p style={{ color: '#64748B' }}>实际成本 = ∑（项目经理+项目负责人）角色成本</p>
+          </div>
+          
+          <div style={{ marginBottom: 16, padding: '12px', backgroundColor: '#F8FAFC', borderRadius: 8 }}>
+            <h5 style={{ marginBottom: 8, color: '#475569' }}>UI团队</h5>
+            <p style={{ marginBottom: 4, color: '#64748B' }}>预期成本 = 预期"设计"阶段成本*0.5</p>
+            <p style={{ color: '#64748B' }}>实际成本 = ∑UI角色成本</p>
+          </div>
+          
+          <div style={{ marginBottom: 16, padding: '12px', backgroundColor: '#F8FAFC', borderRadius: 8 }}>
+            <h5 style={{ marginBottom: 8, color: '#475569' }}>研发团队</h5>
+            <p style={{ marginBottom: 4, color: '#64748B' }}>预期成本 = 预期"设计"阶段成本*0.5 + 预期"研发"阶段成本</p>
+            <p style={{ color: '#64748B' }}>实际成本 = ∑（开发工程师 + 技术经理）角色成本</p>
+          </div>
+          
+          <div style={{ padding: '12px', backgroundColor: '#F8FAFC', borderRadius: 8 }}>
+            <h5 style={{ marginBottom: 8, color: '#475569' }}>测试团队</h5>
+            <p style={{ marginBottom: 4, color: '#64748B' }}>预期成本 = 预期"技术测试"阶段成本 + 预期"性能测试"阶段成本</p>
+            <p style={{ color: '#64748B' }}>实际成本 = ∑测试工程师角色成本</p>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }

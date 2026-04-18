@@ -120,6 +120,115 @@ router.post('/ocr', authMiddleware, upload.array('files', 10), async (req: Reque
 })
 
 /**
+ * POST /ocr - OCR识别OA截图（真实调用 AI 服务）- 保留原有接口用于向后兼容
+ */
+router.post('/ocr', authMiddleware, upload.array('files', 10), async (req: Request, res: Response) => {
+  try {
+    const authReq = req as AuthenticatedRequest
+    const userId = authReq.userId
+    const files = req.files as Express.Multer.File[]
+
+    if (!files || files.length === 0) {
+      return sendError(res, 400, '请上传截图文件')
+    }
+
+    console.log(`[Consumption] 收到OCR识别请求，文件数: ${files.length}`)
+
+    const project = await prisma.project.create({
+      data: {
+        userId,
+        projectName: `OCR识别项目_${dayjs().format('YYYYMMDD')}`,
+        projectType: 'software',
+        status: 'ongoing'
+      }
+    })
+
+    let mergedOcrResult = {
+      contractAmount: 0,
+      preSaleRatio: 0,
+      taxRate: 0.06,
+      externalLaborCost: 0,
+      externalSoftwareCost: 0,
+      currentManpowerCost: 0,
+      members: [] as any[],
+      rawText: ''
+    }
+
+    for (const file of files) {
+      const filePath = path.join(uploadDir, file.filename)
+      const ocrResult = await performOcrRecognition(filePath)
+
+      mergedOcrResult.contractAmount = Math.max(mergedOcrResult.contractAmount, ocrResult.contractAmount || 0)
+      mergedOcrResult.preSaleRatio = Math.max(mergedOcrResult.preSaleRatio, ocrResult.preSaleRatio || 0)
+      mergedOcrResult.taxRate = Math.max(mergedOcrResult.taxRate, ocrResult.taxRate || 0)
+      mergedOcrResult.externalLaborCost = Math.max(mergedOcrResult.externalLaborCost, ocrResult.externalLaborCost || 0)
+      mergedOcrResult.externalSoftwareCost = Math.max(mergedOcrResult.externalSoftwareCost, ocrResult.externalSoftwareCost || 0)
+      mergedOcrResult.currentManpowerCost = Math.max(mergedOcrResult.currentManpowerCost, ocrResult.currentManpowerCost || 0)
+      mergedOcrResult.rawText += (ocrResult.rawText || '') + '\n'
+
+      if (ocrResult.memberInfo && ocrResult.memberInfo.length > 0) {
+        for (const member of ocrResult.memberInfo) {
+          const existingMember = mergedOcrResult.members.find(m => m.name === member.name)
+          if (!existingMember) {
+            mergedOcrResult.members.push(member)
+          }
+        }
+      }
+    }
+
+    console.log(`[Consumption] OCR识别结果: 合同金额=${mergedOcrResult.contractAmount}, 人力成本=${mergedOcrResult.currentManpowerCost}`)
+
+    if (mergedOcrResult.members.length > 0) {
+      for (const member of mergedOcrResult.members) {
+        const dailyCostMap = { P5: 0.08, P6: 0.1, P7: 0.15, P8: 0.2 }
+        const dailyCost = dailyCostMap[member.level as keyof typeof dailyCostMap] || 0.1
+
+        await prisma.projectMember.create({
+          data: {
+            projectId: project.id,
+            name: member.name,
+            level: member.level,
+            dailyCost,
+            role: member.role,
+            reportedHours: member.reportedHours,
+            entryTime: new Date()
+          }
+        })
+      }
+    }
+
+    const response = {
+      projectId: project.id,
+      projectInfo: {
+        projectName: project.projectName,
+        projectManager: '',
+        startDate: dayjs().format('YYYY-MM-DD'),
+        endDate: dayjs().add(1, 'year').format('YYYY-MM-DD'),
+        status: '进行中'
+      },
+      memberInfo: mergedOcrResult.members.map(m => ({
+        name: m.name || '',
+        level: m.level || 'P5',
+        role: m.role || '',
+        reportedHours: m.reportedHours || 0
+      })),
+      contractAmount: mergedOcrResult.contractAmount,
+      preSaleRatio: mergedOcrResult.preSaleRatio,
+      taxRate: mergedOcrResult.taxRate,
+      externalLaborCost: mergedOcrResult.externalLaborCost,
+      externalSoftwareCost: mergedOcrResult.externalSoftwareCost,
+      currentManpowerCost: mergedOcrResult.currentManpowerCost,
+      rawText: 'OCR识别完成'
+    }
+
+    sendResponse(res, response, 'OCR识别成功')
+  } catch (error) {
+    console.error('OCR error:', error)
+    sendError(res, 500, 'OCR识别失败')
+  }
+})
+
+/**
  * 真实 OCR 识别 - 调用 Qwen/Qwen3-Omni-30B-A3B-Thinking 多模态模型
  */
 const performOcrRecognition = async (filePath: string): Promise<OcrResult> => {
@@ -299,7 +408,7 @@ router.get('/project/:projectCode', authMiddleware, async (req: Request, res: Re
 
     // 查询项目
     const project = await prisma.project.findFirst({
-      where: { projectCode: String(projectCode), userId },
+      where: { projectCode: String(projectCode) },
       include: {
         members: true,
         costs: true

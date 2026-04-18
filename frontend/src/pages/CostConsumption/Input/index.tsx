@@ -37,7 +37,8 @@ import {
 import type { UploadProps, UploadFile } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
-import { consumptionApi } from '@/api'
+import { consumptionApi, projectApi } from '@/api'
+import { queryProjectByCode } from '@/utils/projectQuery'
 import { MEMBER_LEVEL_DAILY_COST } from '@/types'
 import type { MemberLevel } from '@/types'
 
@@ -145,64 +146,63 @@ export default function CostConsumptionInput() {
 
     setQuerying(true)
     try {
-      const response = await consumptionApi.queryByProjectCode(projectCode)
-      if (response.data.code === 0 || response.data.code === 200) {
-        const data = response.data.data
-        // 检查data是否为null（项目不存在的情况）
-        if (data) {
-          // 反显项目信息
-          form.setFieldsValue({
-            projectName: data.projectName || '',
-            projectType: data.projectType || 'implementation',
-            status: data.status || 'ongoing',
-            contractAmount: data.contractAmount || 0,
-            preSaleRatio: data.preSaleRatio || 0,
-            taxRate: data.taxRate || 0.06,
-            externalLaborCost: data.externalLaborCost || 0,
-            externalSoftwareCost: data.externalSoftwareCost || 0,
-            otherCost: data.otherCost || 0,
-            currentManpowerCost: data.currentManpowerCost || 0,
-          })
-          setActualProjectId(data.projectId)
+      // 使用统一的项目查询函数
+      const result = await queryProjectByCode(projectCode)
+      
+      if (!result.success) {
+        message.warning(result.message)
+        // 清空除项目编号外的其他表单字段，准备手动输入
+        form.resetFields([
+          'projectName',
+          'projectType',
+          'status',
+          'contractAmount',
+          'preSaleRatio',
+          'taxRate',
+          'externalLaborCost',
+          'externalSoftwareCost',
+          'otherCost',
+          'currentManpowerCost'
+        ])
+        setActualProjectId(null)
+        return
+      }
 
-          // 反显项目成员列表
-          if (data.members && Array.isArray(data.members)) {
-            setMembers(data.members.map((member: any) => ({
-              key: generateKey(),
-              memberId: member.memberId,
-              name: member.name || '',
-              department: member.department || '',
-              level: member.level || 'P5',
-              dailyCost: member.dailyCost || MEMBER_LEVEL_DAILY_COST[member.level as MemberLevel] || 0.16,
-              entryTime: member.entryTime || null,
-              leaveTime: member.leaveTime || null,
-              isToEnd: member.isToEnd || false,
-            })))
-          }
+      if (result.projectInfo) {
+        // 反显项目信息
+        form.setFieldsValue({
+          projectName: result.projectInfo.projectName,
+          projectType: result.projectInfo.projectType,
+          status: result.projectInfo.status,
+          contractAmount: result.projectInfo.contractAmount,
+          preSaleRatio: 0,
+          taxRate: 0.06,
+          externalLaborCost: 0,
+          externalSoftwareCost: 0,
+          otherCost: 0,
+          currentManpowerCost: result.projectInfo.currentManpowerCost,
+        })
+        setActualProjectId(result.projectInfo.projectId)
 
-          message.success('项目信息已加载')
-        } else {
-          // 项目不存在的情况
-          const errorMsg = response.data.message || '项目不存在，请补充完整信息后保存'
-          message.warning(errorMsg)
-          // 清空除项目编号外的其他表单字段，准备手动输入
-          form.resetFields([
-            'projectName',
-            'projectType',
-            'status',
-            'contractAmount',
-            'preSaleRatio',
-            'taxRate',
-            'externalLaborCost',
-            'externalSoftwareCost',
-            'otherCost',
-            'currentManpowerCost'
-          ])
-          setActualProjectId(null)
+        // 反显项目成员列表
+        if (result.members && Array.isArray(result.members)) {
+          setMembers(result.members.map((member) => ({
+            key: generateKey(),
+            memberId: member.memberId,
+            name: member.name || '',
+            department: member.department || '',
+            level: member.level || 'P5',
+            dailyCost: member.dailyCost || MEMBER_LEVEL_DAILY_COST[member.level as MemberLevel] || 0.16,
+            entryTime: member.entryTime || null,
+            leaveTime: member.leaveTime || null,
+            isToEnd: member.isToEnd || false,
+          })))
         }
+
+        message.success('项目信息已加载')
       }
     } catch (err: any) {
-      const errorMsg = err?.response?.data?.message || '项目不存在，请补充完整信息后保存'
+      const errorMsg = err?.response?.data?.message || '查询项目失败，请稍后重试'
       message.warning(errorMsg)
       // 清空除项目编号外的其他表单字段，准备手动输入
       form.resetFields([
@@ -235,57 +235,62 @@ export default function CostConsumptionInput() {
         debounceTimerRef.current = setTimeout(async () => {
           setQuerying(true)
           try {
-            const response = await consumptionApi.queryByProjectCode(projectCodeParam)
-            if (response.data.code === 0 || response.data.code === 200) {
-              const data = response.data.data
-              if (data) {
-                form.setFieldsValue({
-                  projectName: data.projectName || '',
-                  projectType: data.projectType || 'implementation',
-                  status: data.status || 'ongoing',
-                  contractAmount: data.contractAmount || 0,
-                  preSaleRatio: data.preSaleRatio || 0,
-                  taxRate: data.taxRate || 0.06,
-                  externalLaborCost: data.externalLaborCost || 0,
-                  externalSoftwareCost: data.externalSoftwareCost || 0,
-                  otherCost: data.otherCost || 0,
-                  currentManpowerCost: data.currentManpowerCost || 0,
-                })
-                setActualProjectId(data.projectId)
-                if (data.members && Array.isArray(data.members)) {
-                  setMembers(data.members.map((member: any) => ({
-                    key: generateKey(),
-                    memberId: member.memberId,
-                    name: member.name || '',
-                    department: member.department || '',
-                    level: member.level || 'P5',
-                    dailyCost: member.dailyCost || MEMBER_LEVEL_DAILY_COST[member.level as MemberLevel] || 0.16,
-                    entryTime: member.entryTime || null,
-                    leaveTime: member.leaveTime || null,
-                    isToEnd: member.isToEnd || false,
-                  })))
-                }
-                message.success('项目信息已加载')
-              } else {
-                const errorMsg = response.data.message || '项目不存在，请补充完整信息后保存'
-                message.warning(errorMsg)
-                form.resetFields([
-                  'projectName',
-                  'projectType',
-                  'status',
-                  'contractAmount',
-                  'preSaleRatio',
-                  'taxRate',
-                  'externalLaborCost',
-                  'externalSoftwareCost',
-                  'otherCost',
-                  'currentManpowerCost'
-                ])
-                setActualProjectId(null)
+            // 使用统一的项目查询函数
+            const result = await queryProjectByCode(projectCodeParam)
+            
+            if (!result.success) {
+              message.warning(result.message)
+              form.resetFields([
+                'projectName',
+                'projectType',
+                'status',
+                'contractAmount',
+                'preSaleRatio',
+                'taxRate',
+                'externalLaborCost',
+                'externalSoftwareCost',
+                'otherCost',
+                'currentManpowerCost'
+              ])
+              setActualProjectId(null)
+              return
+            }
+
+            if (result.projectInfo) {
+              // 反显项目信息
+              form.setFieldsValue({
+                projectName: result.projectInfo.projectName,
+                projectType: result.projectInfo.projectType,
+                status: result.projectInfo.status,
+                contractAmount: result.projectInfo.contractAmount,
+                preSaleRatio: 0,
+                taxRate: 0.06,
+                externalLaborCost: 0,
+                externalSoftwareCost: 0,
+                otherCost: 0,
+                currentManpowerCost: result.projectInfo.currentManpowerCost,
+              })
+              setActualProjectId(result.projectInfo.projectId)
+              
+              // 反显项目成员列表
+              if (result.members && Array.isArray(result.members)) {
+                setMembers(result.members.map((member) => ({
+                  key: generateKey(),
+                  memberId: member.memberId,
+                  name: member.name || '',
+                  department: member.department || '',
+                  level: member.level || 'P5',
+                  dailyCost: member.dailyCost || MEMBER_LEVEL_DAILY_COST[member.level as MemberLevel] || 0.16,
+                  entryTime: member.entryTime || null,
+                  leaveTime: member.leaveTime || null,
+                  isToEnd: member.isToEnd || false,
+                })))
               }
+              
+              message.success('项目信息已加载')
             }
           } catch (err: any) {
-            const errorMsg = err?.response?.data?.message || '项目不存在，请补充完整信息后保存'
+            const errorMsg = err?.response?.data?.message || '查询项目失败，请稍后重试'
             message.warning(errorMsg)
             form.resetFields([
               'projectName',

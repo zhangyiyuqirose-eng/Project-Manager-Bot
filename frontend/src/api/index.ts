@@ -176,6 +176,14 @@ export const deviationApi = {
 
   exportReport: (projectId: number) =>
     api.get(`/deviation/${projectId}/export`, { responseType: 'blob' }),
+
+  // 保存人力成本明细
+  saveManpowerCost: (data: { projectCode: string; members: any[] }) =>
+    api.post<ApiResponse<any>>('/deviation/save-manpower-cost', data),
+
+  // 更新项目信息到偏差记录
+  updateProjectInfo: (projectId: number, data: { totalContractAmount: number; currentCostConsumption: number; taskProgress: number }) =>
+    api.put<ApiResponse<any>>(`/deviation/${projectId}/project-info`, data),
 }
 
 export default api

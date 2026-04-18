@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import {
   Card,
   Upload,
@@ -28,14 +28,27 @@ import {
   SettingOutlined,
   PlusOutlined,
   DeleteOutlined,
+  SaveOutlined,
   TeamOutlined,
-  DollarOutlined,
   BarChartOutlined,
+  DollarOutlined,
 } from '@ant-design/icons'
 import type { UploadProps, UploadFile } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import { deviationApi } from '@/api'
+import { deviationApi, consumptionApi, projectApi } from '@/api'
+import { queryProjectByCode } from '@/utils/projectQuery'
 import type { MemberLevel, BaselineMode } from '@/types'
+import dayjs from 'dayjs'
+
+// 成员级别日成本映射
+const MEMBER_LEVEL_DAILY_COST: Record<MemberLevel, number> = {
+  'P3': 0.08,
+  'P4': 0.11,
+  'P5': 0.16,
+  'P6': 0.21,
+  'P7': 0.26,
+  'P8': 0.36
+}
 
 const { Text, Title } = Typography
 const { Dragger } = Upload
@@ -88,6 +101,17 @@ const departmentOptions = [
   { value: '员工服务', label: '员工服务' },
 ]
 
+// 角色选项
+const roleOptions = [
+  { value: '项目负责人', label: '项目负责人' },
+  { value: '项目经理', label: '项目经理' },
+  { value: '技术经理', label: '技术经理' },
+  { value: '产品经理', label: '产品经理' },
+  { value: 'UI设计', label: 'UI设计' },
+  { value: '开发工程师', label: '开发工程师' },
+  { value: '测试工程师', label: '测试工程师' },
+]
+
 // 成员表单数据接口
 interface MemberFormData {
   key: string
@@ -96,6 +120,9 @@ interface MemberFormData {
   level: MemberLevel
   role?: string
   reportedHours: number
+  dailyCost: number
+  entryTime?: string
+  leaveTime?: string
 }
 
 // 分析结果接口
@@ -125,11 +152,18 @@ export default function CostDeviationInput() {
 
   // 项目信息
   const [projectInfo, setProjectInfo] = useState<{
+    projectCode: string
     projectName: string
     contractAmount: number
     currentManpowerCost: number
     devopsProgress: number
-  } | null>(null)
+  }>({
+    projectCode: '',
+    projectName: '',
+    contractAmount: 0,
+    currentManpowerCost: 0,
+    devopsProgress: 0
+  })
 
   // 人员清单数据
   const [members, setMembers] = useState<MemberFormData[]>([])
@@ -140,11 +174,16 @@ export default function CostDeviationInput() {
   const [stageRatios, setStageRatios] = useState(defaultStageRatios)
 
   // 预期利润空间
-  const [expectedProfit, setExpectedProfit] = useState<number>(15)
+  const [expectedProfit, setExpectedProfit] = useState<number>(20)
 
   // 分析状态和结果
   const [analyzing, setAnalyzing] = useState(false)
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null)
+
+  // 项目编号查询相关状态
+  const [projectCode, setProjectCode] = useState('')
+  const [querying, setQuerying] = useState(false)
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   // 校验阶段比例合计是否为100%
   const validateStageRatios = () => {
@@ -154,6 +193,205 @@ export default function CostDeviationInput() {
 
   // 生成唯一key
   const generateKey = () => `member_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+
+  // 根据项目编号查询项目信息
+  const handleQueryByProjectCode = useCallback(async () => {
+    if (!projectCode) {
+      message.warning('请输入项目编号')
+      return
+    }
+
+    // 避免重复请求
+    if (querying) {
+      return
+    }
+
+    setQuerying(true)
+    try {
+      // 使用统一的项目查询函数
+      const result = await queryProjectByCode(projectCode)
+      
+      if (!result.success) {
+        message.warning(result.message)
+        return
+      }
+
+      if (result.projectInfo) {
+        // 反显项目信息
+        setProjectInfo({
+          projectCode: result.projectInfo.projectCode,
+          projectName: result.projectInfo.projectName,
+          contractAmount: result.projectInfo.contractAmount,
+          currentManpowerCost: result.projectInfo.currentManpowerCost,
+          devopsProgress: result.projectInfo.taskProgress
+        })
+        
+        form.setFieldsValue({
+          projectCode: result.projectInfo.projectCode,
+          projectName: result.projectInfo.projectName,
+          contractAmount: result.projectInfo.contractAmount,
+          currentManpowerCost: result.projectInfo.currentManpowerCost,
+          taskProgress: result.projectInfo.taskProgress
+        })
+        
+        // 保存项目ID
+        setProjectId(result.projectInfo.projectId)
+        
+        // 尝试获取偏差记录中的任务进度
+        try {
+          const deviationResponse = await deviationApi.getResult(result.projectInfo.projectId)
+          if (deviationResponse.data.code === 0 || deviationResponse.data.code === 200) {
+            const deviationData = deviationResponse.data.data
+            if (deviationData) {
+              // 反显项目信息
+              setProjectInfo(prev => ({
+                ...prev,
+                currentManpowerCost: deviationData.currentCostConsumption || prev.currentManpowerCost,
+                devopsProgress: deviationData.taskProgress || prev.devopsProgress
+              }))
+              
+              form.setFieldsValue({
+                currentManpowerCost: deviationData.currentCostConsumption || result.projectInfo.currentManpowerCost,
+                taskProgress: deviationData.taskProgress || result.projectInfo.taskProgress
+              })
+            }
+          }
+        } catch (error) {
+          // 偏差记录不存在，忽略错误
+        }
+        
+        // 反显人力成本明细（成员信息）
+        if (result.members && Array.isArray(result.members)) {
+          const membersList = result.members.map((member) => ({
+            key: generateKey(),
+            name: member.name || '',
+            department: member.department || '',
+            level: member.level || 'P5',
+            dailyCost: member.dailyCost || 0,
+            role: member.role || '开发',
+            entryTime: member.entryTime ? dayjs(member.entryTime).format('YYYY-MM-DD') : '',
+            leaveTime: member.leaveTime ? dayjs(member.leaveTime).format('YYYY-MM-DD') : '',
+            reportedHours: member.reportedHours || 0
+          }))
+          setMembers(membersList)
+        }
+        
+        message.success('项目信息已加载')
+      }
+    } catch (err: any) {
+      const errorMsg = err?.response?.data?.message || '查询项目失败，请稍后重试'
+      message.warning(errorMsg)
+    } finally {
+      setQuerying(false)
+    }
+  }, [projectCode, form])
+
+  // 根据项目编号获取或创建项目
+  const getOrCreateProject = async (projectCode: string) => {
+    try {
+      // 先尝试通过projectCode查询项目
+      const response = await projectApi.getList({ keyword: projectCode })
+      if (response.data.code === 0 || response.data.code === 200) {
+        const projects = response.data.data || []
+        const existingProject = projects.find((p: any) => p.projectCode === projectCode)
+        if (existingProject) {
+          return existingProject.id
+        }
+      }
+
+      // 如果项目不存在，创建一个新项目
+      const createResponse = await projectApi.create({
+        projectCode,
+        projectName: projectInfo.projectName || '未命名项目',
+        contractAmount: projectInfo.contractAmount || 0,
+        status: '进行中'
+      })
+      if (createResponse.data.code === 0 || createResponse.data.code === 200) {
+        return createResponse.data.data.id
+      }
+
+      throw new Error('获取或创建项目失败')
+    } catch (error) {
+      console.error('获取或创建项目错误:', error)
+      throw error
+    }
+  }
+
+  // 保存人力成本明细
+  const handleSaveManpowerCost = async () => {
+    if (!projectInfo.projectCode) {
+      message.warning('请先输入项目编号')
+      return
+    }
+
+    try {
+      const response = await deviationApi.saveManpowerCost({
+        projectCode: projectInfo.projectCode,
+        members: members.map(member => ({
+          name: member.name,
+          department: member.department,
+          level: member.level,
+          dailyCost: member.dailyCost,
+          role: member.role,
+          entryTime: member.entryTime,
+          leaveTime: member.leaveTime,
+          reportedHours: member.reportedHours
+        }))
+      })
+
+      if (response.data.code === 0 || response.data.code === 200) {
+        message.success('人力成本明细保存成功')
+      } else {
+        message.error(response.data.message || '保存失败')
+      }
+    } catch (error) {
+      console.error('[Deviation] 保存人力成本明细错误:', error)
+      message.error('保存失败，请重试')
+    }
+  }
+
+  // 保存项目信息
+  const handleSaveProjectInfo = async () => {
+    if (!projectInfo.projectCode) {
+      message.warning('请先输入项目编号')
+      return
+    }
+
+    try {
+      // 获取表单值
+      const formValues = form.getFieldsValue()
+      
+      // 更新项目信息状态
+      const updatedProjectInfo = {
+        ...projectInfo,
+        projectName: formValues.projectName || projectInfo.projectName,
+        contractAmount: formValues.contractAmount || projectInfo.contractAmount,
+        currentManpowerCost: formValues.currentManpowerCost || projectInfo.currentManpowerCost,
+        devopsProgress: formValues.taskProgress || projectInfo.devopsProgress
+      }
+      
+      setProjectInfo(updatedProjectInfo)
+
+      // 获取或创建项目
+      let currentProjectId = projectId
+      if (!currentProjectId) {
+        currentProjectId = await getOrCreateProject(updatedProjectInfo.projectCode)
+        setProjectId(currentProjectId)
+      }
+
+      // 保存项目信息到偏差记录
+      await deviationApi.updateProjectInfo(currentProjectId, {
+        totalContractAmount: updatedProjectInfo.contractAmount,
+        currentCostConsumption: updatedProjectInfo.currentManpowerCost,
+        taskProgress: updatedProjectInfo.devopsProgress
+      })
+
+      message.success('项目信息保存成功')
+    } catch (error) {
+      console.error('[Deviation] 保存项目信息错误:', error)
+      message.error('保存失败，请重试')
+    }
+  }
 
   // 自动上传图片
   const autoUploadImages = async (files: UploadFile[]) => {
@@ -302,11 +540,30 @@ export default function CostDeviationInput() {
       render: (value: MemberLevel, record) => (
         <Select
           value={value}
-          onChange={(v: MemberLevel) => handleMemberChange(record.key, 'level', v)}
+          onChange={(v: MemberLevel) => handleMemberLevelChange(record.key, v)}
           options={levelOptions}
           placeholder="请选择等级"
           style={{ width: '100%' }}
         />
+      ),
+    },
+    {
+      title: '日成本(万元)',
+      dataIndex: 'dailyCost',
+      key: 'dailyCost',
+      width: 100,
+      render: (value: number) => (
+        <Tag
+          style={{
+            borderRadius: 8,
+            background: '#3B82F615',
+            color: '#3B82F6',
+            border: 'none',
+            fontWeight: 500,
+          }}
+        >
+          {typeof value === 'number' ? value.toFixed(2) : '-'}
+        </Tag>
       ),
     },
     {
@@ -315,10 +572,11 @@ export default function CostDeviationInput() {
       key: 'role',
       width: 120,
       render: (value: string, record) => (
-        <Input
-          value={value || ''}
-          onChange={(e) => handleMemberChange(record.key, 'role', e.target.value)}
-          placeholder="请输入角色"
+        <Select
+          value={value || undefined}
+          onChange={(v) => handleMemberChange(record.key, 'role', v)}
+          options={roleOptions}
+          placeholder="请选择角色"
           style={{ width: '100%', borderRadius: 8 }}
         />
       ),
@@ -364,6 +622,16 @@ export default function CostDeviationInput() {
     )
   }
 
+  // 成员等级变更时自动回填日成本
+  const handleMemberLevelChange = (key: string, level: MemberLevel) => {
+    const dailyCost = MEMBER_LEVEL_DAILY_COST[level]
+    setMembers((prev) =>
+      prev.map((m) =>
+        m.key === key ? { ...m, level, dailyCost } : m
+      )
+    )
+  }
+
   // 新增成员
   const handleAddMember = () => {
     const newMember: MemberFormData = {
@@ -371,6 +639,7 @@ export default function CostDeviationInput() {
       name: '',
       department: '',
       level: 'P5' as MemberLevel,
+      dailyCost: MEMBER_LEVEL_DAILY_COST['P5'],
       role: '',
       reportedHours: 0,
     }
@@ -408,39 +677,58 @@ export default function CostDeviationInput() {
     }
   }
 
-  // 开始分析 - 在当前页面计算并显示结果
+  // 开始分析 - 跳转到结果页面
   const handleStartAnalysis = async () => {
-    if (!projectId) {
-      message.warning('请先上传截图并进行AI识别')
-      return
-    }
-
-    if (!projectInfo) {
-      message.warning('请先进行AI识别')
-      return
-    }
-
     if (!validateStageRatios()) {
       message.error('阶段比例合计必须为100%')
       return
     }
 
+    if (!projectInfo.projectCode || !projectInfo.projectName || projectInfo.contractAmount === 0 || projectInfo.currentManpowerCost === undefined || projectInfo.devopsProgress === undefined) {
+      message.error('请完善项目信息')
+      return
+    }
+    
+    if (projectInfo.devopsProgress === 0) {
+      message.warning('DevOps进度为0，预期成本消耗将为0，请确认是否需要调整')
+    }
+
+    if (members.length === 0) {
+      message.error('请添加项目成员')
+      return
+    }
+
     setAnalyzing(true)
     try {
+      // 获取或创建项目
+      let currentProjectId = projectId
+      if (!currentProjectId) {
+        currentProjectId = await getOrCreateProject(projectInfo.projectCode)
+        setProjectId(currentProjectId)
+      }
+
+      // 保存项目信息到偏差记录
+      await deviationApi.updateProjectInfo(currentProjectId, {
+        totalContractAmount: projectInfo.contractAmount,
+        currentCostConsumption: projectInfo.currentManpowerCost,
+        taskProgress: projectInfo.devopsProgress
+      })
+
       // 保存基准配置
-      await deviationApi.saveBaseline(projectId, {
-        mode: baselineMode,
-        stageRatios: baselineMode === 'default' ? stageRatios : undefined,
-        expectedProfit,
+      await deviationApi.saveBaseline(currentProjectId, {
+        baselineType: baselineMode,
+        expectedStages: baselineMode === 'default' ? stageRatios : undefined,
       })
 
       // 计算偏差
-      const response = await deviationApi.calculateDeviation(projectId)
+      const response = await deviationApi.calculateDeviation(currentProjectId)
       if (response.data.code === 0 || response.data.code === 200) {
         message.success('分析完成')
-        setAnalysisResult(response.data.data)
+        // 跳转到结果页面
+        window.location.href = `/cost-deviation/result?projectId=${currentProjectId}&expectedProfit=${expectedProfit}`
       }
-    } catch {
+    } catch (error) {
+      console.error('分析错误:', error)
       message.error('分析失败')
     } finally {
       setAnalyzing(false)
@@ -599,7 +887,7 @@ export default function CostDeviationInput() {
       )}
 
       {/* 项目信息模块 */}
-      {projectInfo && !recognizing && (
+      {!recognizing && (
         <Card
           style={{
             borderRadius: 16,
@@ -628,7 +916,7 @@ export default function CostDeviationInput() {
               <Card size="small" style={{ borderRadius: 12, textAlign: 'center', background: '#ECFDF5', border: 'none' }}>
                 <Text type="secondary" style={{ fontSize: 12 }}>合同金额</Text>
                 <div style={{ marginTop: 8, fontWeight: 600, color: '#065F46', fontSize: 16 }}>
-                  {projectInfo.contractAmount?.toFixed(2) || '-'} 万元
+                  {typeof projectInfo.contractAmount === 'number' ? projectInfo.contractAmount.toFixed(2) : '-'} 万元
                 </div>
               </Card>
             </Col>
@@ -636,7 +924,7 @@ export default function CostDeviationInput() {
               <Card size="small" style={{ borderRadius: 12, textAlign: 'center', background: '#F5F3FF', border: 'none' }}>
                 <Text type="secondary" style={{ fontSize: 12 }}>人力成本</Text>
                 <div style={{ marginTop: 8, fontWeight: 600, color: '#5B21B6', fontSize: 16 }}>
-                  {projectInfo.currentManpowerCost?.toFixed(2) || '-'} 万元
+                  {typeof projectInfo.currentManpowerCost === 'number' ? projectInfo.currentManpowerCost.toFixed(2) : '-'} 万元
                 </div>
               </Card>
             </Col>
@@ -644,7 +932,7 @@ export default function CostDeviationInput() {
               <Card size="small" style={{ borderRadius: 12, textAlign: 'center', background: '#FFFBEB', border: 'none' }}>
                 <Text type="secondary" style={{ fontSize: 12 }}>DevOps进度</Text>
                 <div style={{ marginTop: 8, fontWeight: 600, color: '#92400E', fontSize: 16 }}>
-                  {projectInfo.devopsProgress?.toFixed(1) || '-'} %
+                  {typeof projectInfo.devopsProgress === 'number' ? projectInfo.devopsProgress.toFixed(1) : '-'} %
                 </div>
               </Card>
             </Col>
@@ -653,6 +941,33 @@ export default function CostDeviationInput() {
           {/* 可编辑的项目信息表单 */}
           <Form form={form} layout="vertical" style={{ marginTop: 20 }}>
             <Row gutter={20}>
+              <Col xs={24} md={6}>
+                <Form.Item label="项目编号" name="projectCode">
+                  <Input
+                    value={projectCode}
+                    onChange={(e) => setProjectCode(e.target.value)}
+                    onBlur={() => {
+                      if (projectCode.trim()) {
+                        // 防抖处理，避免频繁请求
+                        if (debounceTimerRef.current) {
+                          clearTimeout(debounceTimerRef.current)
+                        }
+                        debounceTimerRef.current = setTimeout(() => {
+                          handleQueryByProjectCode()
+                        }, 1000) // 1秒防抖
+                      }
+                    }}
+                    onPressEnter={() => {
+                      if (projectCode.trim()) {
+                        handleQueryByProjectCode()
+                      }
+                    }}
+                    placeholder="请输入项目编号"
+                    style={{ borderRadius: 8 }}
+                    disabled={querying}
+                  />
+                </Form.Item>
+              </Col>
               <Col xs={24} md={6}>
                 <Form.Item label="项目名称" name="projectName">
                   <Input placeholder="请输入项目名称" style={{ borderRadius: 8 }} />
@@ -678,7 +993,7 @@ export default function CostDeviationInput() {
                   />
                 </Form.Item>
               </Col>
-              <Col xs={24} md={6}>
+              <Col xs={24} md={6} offset={18}>
                 <Form.Item label="DevOps进度(%)" name="taskProgress">
                   <InputNumber
                     placeholder="请输入进度"
@@ -690,12 +1005,24 @@ export default function CostDeviationInput() {
                 </Form.Item>
               </Col>
             </Row>
+            
+            {/* 项目信息保存按钮 */}
+            <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end' }}>
+              <Button
+                type="primary"
+                icon={<SaveOutlined />}
+                onClick={handleSaveProjectInfo}
+                style={{ borderRadius: 8 }}
+              >
+                项目信息保存
+              </Button>
+            </div>
           </Form>
         </Card>
       )}
 
-      {/* 人员清单模块 */}
-      {projectInfo && !recognizing && (
+      {/* 人力成本明细模块 */}
+      {!recognizing && (
         <Card
           style={{
             borderRadius: 16,
@@ -703,12 +1030,22 @@ export default function CostDeviationInput() {
             border: '1px solid var(--color-border-light)',
           }}
         >
-          <div style={{ marginBottom: 16 }}>
-            <Title level={4} style={{ marginBottom: 4, fontWeight: 600 }}>
-              <TeamOutlined style={{ marginRight: 10, color: '#F59E0B' }} />
-              人员清单
-            </Title>
-            <Text type="secondary" style={{ fontSize: 13 }}>管理项目团队成员信息，可新增、修改或删除成员</Text>
+          <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <Title level={4} style={{ marginBottom: 4, fontWeight: 600 }}>
+                <TeamOutlined style={{ marginRight: 10, color: '#F59E0B' }} />
+                当前人力成本明细
+              </Title>
+              <Text type="secondary" style={{ fontSize: 13 }}>管理项目团队成员信息，可新增、修改或删除成员</Text>
+            </div>
+            <Button
+              type="primary"
+              icon={<SaveOutlined />}
+              onClick={handleSaveManpowerCost}
+              style={{ borderRadius: 8 }}
+            >
+              保存人力成本明细
+            </Button>
           </div>
 
           <Table
@@ -734,87 +1071,87 @@ export default function CostDeviationInput() {
       )}
 
       {/* 分析基准配置 */}
-      {projectInfo && (
-        <Card
-          style={{
-            borderRadius: 16,
-            marginBottom: 24,
-            border: '1px solid var(--color-border-light)',
-          }}
-        >
-          <div style={{ marginBottom: 16 }}>
-            <Title level={4} style={{ marginBottom: 4, fontWeight: 600 }}>
-              <SettingOutlined style={{ marginRight: 10, color: '#6366F1' }} />
-              分析基准配置
-            </Title>
-          </div>
+      <Card
+        style={{
+          borderRadius: 16,
+          marginBottom: 24,
+          border: '1px solid var(--color-border-light)',
+        }}
+      >
+        <div style={{ marginBottom: 16 }}>
+          <Title level={4} style={{ marginBottom: 4, fontWeight: 600 }}>
+            <SettingOutlined style={{ marginRight: 10, color: '#6366F1' }} />
+            分析基准配置
+          </Title>
+        </div>
 
-          <Form layout="vertical">
-            <Form.Item label="基准模式选择">
-              <Radio.Group
-                value={baselineMode}
-                onChange={(e) => setBaselineMode(e.target.value)}
-                optionType="button"
-                buttonStyle="solid"
+        <Form layout="vertical">
+          <Form.Item label="基准模式选择">
+            <Radio.Group
+              value={baselineMode}
+              onChange={(e) => setBaselineMode(e.target.value)}
+              optionType="button"
+              buttonStyle="solid"
+            >
+              <Radio.Button value="default">系统默认比例</Radio.Button>
+              <Radio.Button value="custom">上传工作量评估表</Radio.Button>
+            </Radio.Group>
+          </Form.Item>
+
+          {baselineMode === 'custom' && (
+            <Form.Item label="工作量评估表">
+              <Dragger {...baselineUploadProps}>
+                <p className="ant-upload-drag-icon">
+                  <InboxOutlined style={{ color: '#F59E0B', fontSize: 32 }} />
+                </p>
+                <p className="ant-upload-text">点击或拖拽文件到此区域上传</p>
+              </Dragger>
+              <Button
+                type="primary"
+                icon={<DollarOutlined />}
+                onClick={handleBaselineUpload}
+                disabled={baselineFileList.length === 0}
+                style={{ marginTop: 12, borderRadius: 8 }}
               >
-                <Radio.Button value="default">系统默认比例</Radio.Button>
-                <Radio.Button value="custom">上传工作量评估表</Radio.Button>
-              </Radio.Group>
+                上传评估表
+              </Button>
             </Form.Item>
+          )}
 
-            {baselineMode === 'custom' && (
-              <Form.Item label="工作量评估表">
-                <Dragger {...baselineUploadProps}>
-                  <p className="ant-upload-drag-icon">
-                    <InboxOutlined style={{ color: '#F59E0B', fontSize: 32 }} />
-                  </p>
-                  <p className="ant-upload-text">点击或拖拽文件到此区域上传</p>
-                </Dragger>
-                <Button
-                  type="primary"
-                  icon={<DollarOutlined />}
-                  onClick={handleBaselineUpload}
-                  disabled={baselineFileList.length === 0}
-                  style={{ marginTop: 12, borderRadius: 8 }}
-                >
-                  上传评估表
-                </Button>
-              </Form.Item>
-            )}
+          {baselineMode === 'default' && (
+            <Form.Item label="阶段比例配置">
+              <div style={{ marginBottom: 12 }}>
+                <Tag color={validateStageRatios() ? 'success' : 'warning'}>
+                  比例合计: {stageRatios.reduce((sum, item) => sum + item.ratio, 0)}%
+                </Tag>
+              </div>
+              <Row gutter={[12, 12]}>
+                {stageRatios.map((item, index) => (
+                  <Col xs={8} sm={4} key={item.stage}>
+                    <div style={{ textAlign: 'center' }}>
+                      <Text type="secondary" style={{ fontSize: 12 }}>{item.stage}</Text>
+                      <InputNumber
+                        value={item.ratio}
+                        onChange={(value) => {
+                          const newRatios = [...stageRatios]
+                          newRatios[index].ratio = value || 0
+                          setStageRatios(newRatios)
+                        }}
+                        min={0}
+                        max={100}
+                        size="small"
+                        style={{ width: '100%', marginTop: 4 }}
+                        addonAfter="%"
+                      />
+                    </div>
+                  </Col>
+                ))}
+              </Row>
+            </Form.Item>
+          )}
 
-            {baselineMode === 'default' && (
-              <Form.Item label="阶段比例配置">
-                <div style={{ marginBottom: 12 }}>
-                  <Tag color={validateStageRatios() ? 'success' : 'warning'}>
-                    比例合计: {stageRatios.reduce((sum, item) => sum + item.ratio, 0)}%
-                  </Tag>
-                </div>
-                <Row gutter={[12, 12]}>
-                  {stageRatios.map((item, index) => (
-                    <Col xs={8} sm={4} key={item.stage}>
-                      <div style={{ textAlign: 'center' }}>
-                        <Text type="secondary" style={{ fontSize: 12 }}>{item.stage}</Text>
-                        <InputNumber
-                          value={item.ratio}
-                          onChange={(value) => {
-                            const newRatios = [...stageRatios]
-                            newRatios[index].ratio = value || 0
-                            setStageRatios(newRatios)
-                          }}
-                          min={0}
-                          max={100}
-                          size="small"
-                          style={{ width: '100%', marginTop: 4 }}
-                          addonAfter="%"
-                        />
-                      </div>
-                    </Col>
-                  ))}
-                </Row>
-              </Form.Item>
-            )}
-
-            <Form.Item label="预期利润空间(%)">
+          <Form.Item label="预期利润空间(%)">
+            <div style={{ display: 'flex', alignItems: 'center' }}>
               <InputNumber
                 value={expectedProfit}
                 onChange={(value) => setExpectedProfit(value || 0)}
@@ -824,32 +1161,33 @@ export default function CostDeviationInput() {
                 style={{ width: 150 }}
                 addonAfter="%"
               />
-            </Form.Item>
-          </Form>
-        </Card>
-      )}
+              <Tooltip title="利润覆盖税率、外包采购、售前、硬件设备等成本">
+                <InfoCircleOutlined style={{ color: '#64748b', marginLeft: 8 }} />
+              </Tooltip>
+            </div>
+          </Form.Item>
+        </Form>
+      </Card>
 
       {/* 开始分析按钮 */}
-      {projectInfo && (
-        <Card style={{ borderRadius: 16, marginBottom: 24 }}>
-          <Button
-            type="primary"
-            size="large"
-            icon={<BarChartOutlined />}
-            onClick={handleStartAnalysis}
-            loading={analyzing}
-            disabled={!projectInfo || !validateStageRatios()}
-            style={{
-              width: '100%',
-              borderRadius: 12,
-              height: 48,
-              fontWeight: 600,
-            }}
-          >
-            开始分析
-          </Button>
-        </Card>
-      )}
+      <Card style={{ borderRadius: 16, marginBottom: 24 }}>
+        <Button
+          type="primary"
+          size="large"
+          icon={<BarChartOutlined />}
+          onClick={handleStartAnalysis}
+          loading={analyzing}
+          disabled={!projectInfo.projectCode || !projectInfo.projectName || projectInfo.contractAmount === 0 || projectInfo.currentManpowerCost === undefined || projectInfo.devopsProgress === undefined || !validateStageRatios() || members.length === 0}
+          style={{
+            width: '100%',
+            borderRadius: 12,
+            height: 48,
+            fontWeight: 600,
+          }}
+        >
+          开始分析
+        </Button>
+      </Card>
 
       {/* 分析结果 - 在当前页面显示 */}
       {analysisResult && (

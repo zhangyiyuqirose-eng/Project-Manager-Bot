@@ -56,8 +56,7 @@ const navConfig = [
     description: 'AI智能偏差分析',
     children: [
       { key: '/cost-deviation/input', label: '数据输入', icon: '🔍' },
-      { key: '/cost-deviation/result', label: '偏差分析', icon: '📉' },
-      { key: '/cost-deviation/member-list', label: '项目人员清单', icon: '👥' },
+      { key: '/cost-deviation/result', label: '偏差结果', icon: '📉' },
     ],
   },
   {
