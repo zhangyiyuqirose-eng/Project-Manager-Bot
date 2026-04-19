@@ -28,17 +28,19 @@ import {
   SettingOutlined,
   PlusOutlined,
   DeleteOutlined,
-  SaveOutlined,
-  TeamOutlined,
-  BarChartOutlined,
+  DownloadOutlined,
   DollarOutlined,
+  SaveOutlined,
+  BarChartOutlined,
+  TeamOutlined,
 } from '@ant-design/icons'
 import type { UploadProps, UploadFile } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import { deviationApi, consumptionApi, projectApi } from '@/api'
+import { deviationApi, projectApi } from '@/api'
 import { queryProjectByCode } from '@/utils/projectQuery'
 import type { MemberLevel, BaselineMode } from '@/types'
 import dayjs from 'dayjs'
+import * as XLSX from 'xlsx'
 
 // 成员级别日成本映射
 const MEMBER_LEVEL_DAILY_COST: Record<MemberLevel, number> = {
@@ -65,11 +67,181 @@ const defaultStageRatios = [
 
 // 成员等级选项
 const levelOptions: { value: MemberLevel; label: string }[] = [
+  { value: 'P3', label: 'P3' },
+  { value: 'P4', label: 'P4' },
   { value: 'P5', label: 'P5' },
   { value: 'P6', label: 'P6' },
   { value: 'P7', label: 'P7' },
   { value: 'P8', label: 'P8' },
 ]
+
+// 阶段分类映射
+const stageMapping: Record<string, string> = {
+  '需求': '需求',
+  '设计': '设计',
+  '开发': '开发',
+  '技术测试': '技术测试',
+  '性能测试': '性能测试',
+  '投产': '投产',
+  '系统设计': '设计',
+  '业务测试': '技术测试',
+  '准生产': '技术测试',
+}
+
+// 阶段关键词映射
+const stageKeywords: Record<string, string[]> = {
+  '需求': ['需求', '分析', '调研'],
+  '设计': ['设计', '架构', '原型'],
+  '开发': ['开发', '编码', '实现'],
+  '技术测试': ['测试', '质检', '验证', '准生产'],
+  '性能测试': ['性能', '压力', '负载'],
+  '投产': ['投产', '上线', '部署'],
+}
+
+// 解析工作量值
+const parseWorkload = (value: unknown): number => {
+  if (typeof value === 'number') {
+    return value
+  }
+  if (typeof value === 'string') {
+    const match = value.match(/\d+(\.\d+)?/)
+    if (match) {
+      return parseFloat(match[0])
+    }
+  }
+  return 0
+}
+
+// 模糊匹配阶段
+const matchStage = (stageName: string): string => {
+  if (!stageName) return '其他'
+  
+  // 精确匹配
+  if (stageMapping[stageName]) {
+    return stageMapping[stageName]
+  }
+  
+  // 关键词匹配
+  for (const [stage, keywords] of Object.entries(stageKeywords)) {
+    for (const keyword of keywords) {
+      if (stageName.includes(keyword)) {
+        return stage
+      }
+    }
+  }
+  
+  return '其他'
+}
+
+// 解析Excel文件并汇总工作量
+const analyzeWorkloadExcel = (file: File): Promise<{ stageRatios: Array<{ stage: string; ratio: number }> }> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      try {
+        const data = e.target?.result
+        const workbook = XLSX.read(data, { type: 'binary' })
+        
+        // 查找「项目工作量评估表」工作表
+        let targetSheet: XLSX.WorkSheet | undefined
+        for (const sheetName of workbook.SheetNames) {
+          if (sheetName.includes('项目工作量评估表') || sheetName.includes('工作量评估表')) {
+            targetSheet = workbook.Sheets[sheetName]
+            break
+          }
+        }
+        
+        if (!targetSheet) {
+          // 如果找不到目标工作表，使用第一个工作表
+          targetSheet = workbook.Sheets[workbook.SheetNames[0]]
+        }
+        
+        // 转换为数组
+        const jsonData = XLSX.utils.sheet_to_json(targetSheet, { header: 1 })
+        
+        // 初始化阶段工作量汇总
+        const stageWorkload: Record<string, { total: number; count: number }> = {
+          '需求': { total: 0, count: 0 },
+          '设计': { total: 0, count: 0 },
+          '开发': { total: 0, count: 0 },
+          '技术测试': { total: 0, count: 0 },
+          '性能测试': { total: 0, count: 0 },
+          '投产': { total: 0, count: 0 },
+          '其他': { total: 0, count: 0 },
+        }
+        
+        let currentStage = ''
+        
+        // 遍历数据行（跳过表头）
+        for (let i = 1; i < jsonData.length; i++) {
+          const row = jsonData[i]
+          if (!row || row.length < 12) continue
+          
+          // 第1列（索引0）是阶段名称
+          const stageCell = row[1]
+          if (stageCell && stageCell.toString().trim()) {
+            currentStage = stageCell.toString().trim()
+          }
+          
+          // 第12列（索引11）是工作量
+          const workloadCell = row[12]
+          const workload = parseWorkload(workloadCell)
+          
+          if (workload > 0) {
+            const stage = matchStage(currentStage)
+            stageWorkload[stage].total += workload
+            stageWorkload[stage].count += 1
+          }
+        }
+        
+        // 计算总工作量
+        const totalWorkload = Object.values(stageWorkload).reduce((sum, item) => sum + item.total, 0)
+        
+        // 生成阶段比例
+        const stageRatios = Object.entries(stageWorkload)
+          .filter(([_, data]) => data.total > 0 || _ !== '其他')
+          .map(([stage, data]) => ({
+            stage,
+            ratio: totalWorkload > 0 ? Math.round((data.total / totalWorkload) * 100) : 0
+          }))
+          .filter(item => item.stage !== '其他')
+        
+        // 确保比例合计为100%
+        const totalRatio = stageRatios.reduce((sum, item) => sum + item.ratio, 0)
+        if (totalRatio !== 100 && stageRatios.length > 0) {
+          // 调整最后一个阶段的比例
+          const lastIndex = stageRatios.length - 1
+          stageRatios[lastIndex].ratio = 100 - stageRatios.slice(0, lastIndex).reduce((sum, item) => sum + item.ratio, 0)
+        }
+        
+        // 控制台打印结果
+        console.log('=== 工作量汇总结果 ===')
+        console.log('序号\t项目阶段\t工作量(人天)\t占比(%)\t记录数')
+        stageRatios.forEach((item, index) => {
+          const stageData = stageWorkload[item.stage]
+          console.log(`${index + 1}\t${item.stage}\t${stageData.total.toFixed(2)}\t${item.ratio}%\t${stageData.count}`)
+        })
+        console.log(`总计\t\t${totalWorkload.toFixed(2)}\t100%\t${Object.values(stageWorkload).reduce((sum, item) => sum + item.count, 0)}`)
+        
+        // 提取各阶段工作量数据
+        const workloadData: Record<string, number> = {}
+        Object.entries(stageWorkload).forEach(([stage, data]) => {
+          if (stage !== '其他') {
+            workloadData[stage] = data.total
+          }
+        })
+        
+        resolve({ stageRatios, workloadData })
+      } catch (error) {
+        reject(error)
+      }
+    }
+    reader.onerror = () => {
+      reject(new Error('文件读取失败'))
+    }
+    reader.readAsBinaryString(file)
+  })
+}
 
 // 部门选项
 const departmentOptions = [
@@ -148,6 +320,7 @@ export default function CostDeviationInput() {
 
   // AI识别状态
   const [recognizing, setRecognizing] = useState(false)
+  const [ocrSuccess, setOcrSuccess] = useState(false)
   const [projectId, setProjectId] = useState<number | null>(null)
 
   // 项目信息
@@ -179,6 +352,7 @@ export default function CostDeviationInput() {
   // 分析状态和结果
   const [analyzing, setAnalyzing] = useState(false)
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null)
+  const [stageWorkloadData, setStageWorkloadData] = useState<Record<string, number>>({})
 
   // 项目编号查询相关状态
   const [projectCode, setProjectCode] = useState('')
@@ -256,19 +430,19 @@ export default function CostDeviationInput() {
               })
             }
           }
-        } catch (error) {
+        } catch {
           // 偏差记录不存在，忽略错误
         }
         
         // 反显人力成本明细（成员信息）
         if (result.members && Array.isArray(result.members)) {
-          const membersList = result.members.map((member) => ({
+          const membersList = result.members.map((member: any) => ({
             key: generateKey(),
             name: member.name || '',
             department: member.department || '',
             level: member.level || 'P5',
             dailyCost: member.dailyCost || 0,
-            role: member.role || '开发',
+            role: member.role || '开发工程师',
             entryTime: member.entryTime ? dayjs(member.entryTime).format('YYYY-MM-DD') : '',
             leaveTime: member.leaveTime ? dayjs(member.leaveTime).format('YYYY-MM-DD') : '',
             reportedHours: member.reportedHours || 0
@@ -278,13 +452,13 @@ export default function CostDeviationInput() {
         
         message.success('项目信息已加载')
       }
-    } catch (err: any) {
-      const errorMsg = err?.response?.data?.message || '查询项目失败，请稍后重试'
+    } catch (err) {
+      const errorMsg = (err as any)?.response?.data?.message || '查询项目失败，请稍后重试'
       message.warning(errorMsg)
     } finally {
       setQuerying(false)
     }
-  }, [projectCode, form])
+  }, [projectCode, form, querying])
 
   // 根据项目编号获取或创建项目
   const getOrCreateProject = async (projectCode: string) => {
@@ -293,7 +467,7 @@ export default function CostDeviationInput() {
       const response = await projectApi.getList({ keyword: projectCode })
       if (response.data.code === 0 || response.data.code === 200) {
         const projects = response.data.data || []
-        const existingProject = projects.find((p: any) => p.projectCode === projectCode)
+        const existingProject = projects.find((p: { projectCode: string; id: number }) => p.projectCode === projectCode)
         if (existingProject) {
           return existingProject.id
         }
@@ -344,8 +518,7 @@ export default function CostDeviationInput() {
       } else {
         message.error(response.data.message || '保存失败')
       }
-    } catch (error) {
-      console.error('[Deviation] 保存人力成本明细错误:', error)
+    } catch {
       message.error('保存失败，请重试')
     }
   }
@@ -444,53 +617,177 @@ export default function CostDeviationInput() {
     }
   }
 
-  // AI识别处理 - 调用本地OCR服务
+  // 将文件转换为base64
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => {
+        const result = reader.result as string
+        const base64 = result.split(',')[1]
+        resolve(base64)
+      }
+      reader.onerror = reject
+      reader.readAsDataURL(file)
+    })
+  }
+
+  // 使用大模型API进行OCR识别
+  const recognizeWithLLM = async (imageFile: File): Promise<any> => {
+    try {
+      const imageBase64 = await fileToBase64(imageFile)
+
+      const LLM_CONFIG = {
+        URL: 'https://www.finna.com.cn/v1/chat/completions',
+        MODEL: 'qwen2.5-vl-72b-instruct',
+        API_KEY: 'app-7FrGiVvM1BjpWKSf9vsUF6rJ'
+      }
+
+      const requestBody = {
+        model: LLM_CONFIG.MODEL,
+        messages: [
+          {
+            role: 'system',
+            content: `你是一个专业的项目财务数据分析师。请分析用户提供的项目截图，提取以下信息：
+1. 项目名称
+2. 项目编号
+3. 合同金额（万元）
+4. 当前人力成本（万元）
+5. DevOps进度或任务进度（%）
+6. 项目成员信息（姓名、等级[P5/P6/P7/P8]、部门、已报工时）
+
+请以JSON格式返回结果，格式如下：
+{
+  "projectName": "",
+  "projectCode": "",
+  "contractAmount": 0,
+  "currentManpowerCost": 0,
+  "taskProgress": 0,
+  "members": [
+    {
+      "name": "",
+      "level": "P5|P6|P7|P8",
+      "department": "",
+      "reportedHours": 0
+    }
+  ]
+}
+
+只返回JSON，不要返回其他内容。如果图片中无法找到某项信息，对应字段填0或空字符串。`
+          },
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: '请识别并提取图片中的项目信息和财务数据。仔细观察图片中的所有数字和文字信息。' },
+              { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${imageBase64}` } }
+            ]
+          }
+        ],
+        temperature: 0.3,
+        stream: false
+      }
+
+      const response = await fetch(LLM_CONFIG.URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${LLM_CONFIG.API_KEY}`
+        },
+        body: JSON.stringify(requestBody)
+      })
+
+      if (!response.ok) {
+        throw new Error(`API调用失败: ${response.status} ${response.statusText}`)
+      }
+
+      const data = await response.json()
+      const content = data.choices?.[0]?.message?.content
+
+      if (!content) {
+        throw new Error('API返回内容为空')
+      }
+
+      const jsonMatch = content.match(/\{[\s\S]*\}/)
+      if (!jsonMatch) {
+        throw new Error('无法从API返回中提取JSON')
+      }
+
+      const result = JSON.parse(jsonMatch[0])
+      console.log('[OCR] 识别结果:', result)
+
+      if (result.contractAmount > 10000) {
+        result.contractAmount = Math.round((result.contractAmount / 10000) * 100) / 100
+      }
+
+      if (result.currentManpowerCost > 10000) {
+        result.currentManpowerCost = Math.round((result.currentManpowerCost / 10000) * 100) / 100
+      }
+
+      return result
+    } catch (error) {
+      console.error('[OCR] 识别失败:', error)
+      throw error
+    }
+  }
+
+  // AI识别处理 - 使用前端大模型API进行OCR识别
   const handleAiRecognize = async () => {
-    if (!projectId) {
-      message.warning('请先上传截图')
+    if (screenshotFiles.length === 0) {
+      message.warning('请先上传项目截图')
       return
     }
 
     setRecognizing(true)
+    setOcrSuccess(false)
     try {
-      const response = await deviationApi.aiRecognize(projectId)
-      if (response.data.code === 0 || response.data.code === 200) {
-        message.success('AI识别完成')
+      const files = screenshotFiles
+        .map((f) => f.originFileObj)
+        .filter((f): f is NonNullable<typeof f> => f !== undefined)
+        .map((f) => f as File)
 
-        // 自动填充项目信息
-        if (response.data.data) {
-          const data = response.data.data
-          setProjectInfo({
-            projectName: data.projectName || '',
-            contractAmount: data.totalContractAmount || 0,
-            currentManpowerCost: data.currentCostConsumption || 0,
-            devopsProgress: data.taskProgress || 0,
-          })
-
-          form.setFieldsValue({
-            projectName: data.projectName,
-            contractAmount: data.totalContractAmount,
-            currentManpowerCost: data.currentCostConsumption,
-            taskProgress: data.taskProgress,
-          })
-
-          // 初始化成员列表
-          if (data.members && data.members.length > 0) {
-            setMembers(
-              data.members.map((m: any) => ({
-                key: generateKey(),
-                name: m.name,
-                department: m.department || '',
-                level: m.level as MemberLevel,
-                role: m.role || '',
-                reportedHours: m.reportedHours || 0,
-              }))
-            )
-          }
-        }
+      if (files.length === 0) {
+        message.warning('请先上传项目截图')
+        return
       }
-    } catch {
-      message.error('AI识别失败，请检查OCR服务是否启动')
+
+      const ocrData = await recognizeWithLLM(files[0])
+
+      if (ocrData) {
+        setProjectInfo({
+          projectCode: ocrData.projectCode || projectInfo.projectCode,
+          projectName: ocrData.projectName || '',
+          contractAmount: ocrData.contractAmount || 0,
+          currentManpowerCost: ocrData.currentManpowerCost || 0,
+          devopsProgress: ocrData.taskProgress || 0,
+        })
+
+        form.setFieldsValue({
+          projectName: ocrData.projectName,
+          projectCode: ocrData.projectCode,
+          contractAmount: ocrData.contractAmount,
+          currentManpowerCost: ocrData.currentManpowerCost,
+          taskProgress: ocrData.taskProgress,
+        })
+
+        if (ocrData.members && Array.isArray(ocrData.members) && ocrData.members.length > 0) {
+          const newMembers = ocrData.members.map((member: any) => ({
+            key: generateKey(),
+            name: member.name || '',
+            department: member.department || '',
+            level: (member.level as MemberLevel) || 'P5',
+            role: '',
+            reportedHours: member.reportedHours || 0,
+            dailyCost: MEMBER_LEVEL_DAILY_COST[member.level as MemberLevel] || 0.16,
+          }))
+
+          setMembers([...members, ...newMembers])
+        }
+
+        setOcrSuccess(true)
+        message.success('OCR识别成功，请核对信息')
+      }
+    } catch (error) {
+      console.error('[OCR] AI识别失败:', error)
+      message.error('OCR识别失败，请重试')
     } finally {
       setRecognizing(false)
     }
@@ -651,6 +948,30 @@ export default function CostDeviationInput() {
     setMembers((prev) => prev.filter((m) => m.key !== key))
   }
 
+  // 下载工作量评估表模板
+  const handleDownloadTemplate = async () => {
+    try {
+      const templatePath = '/templates/工作量评估表-模板.xlsx'
+      const response = await fetch(templatePath)
+      if (!response.ok) {
+        message.error('模板文件不存在，请联系管理员')
+        return
+      }
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = '工作量评估表-模板.xlsx'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('下载模板失败:', error)
+      message.error('下载模板失败')
+    }
+  }
+
   // 上传工作量评估表
   const handleBaselineUpload = async () => {
     if (baselineFileList.length === 0) {
@@ -662,18 +983,23 @@ export default function CostDeviationInput() {
     if (!file) return
 
     try {
-      const response = await deviationApi.saveBaseline(projectId!, {
-        mode: 'custom',
-        file,
-      })
-      if (response.data.code === 0 || response.data.code === 200) {
-        message.success('工作量评估表上传成功')
-        if (response.data.data?.stageRatios) {
-          setStageRatios(response.data.data.stageRatios)
+      message.loading('正在分析工作量评估表...')
+      const result = await analyzeWorkloadExcel(file)
+      
+      if (result.stageRatios && result.stageRatios.length > 0) {
+        // 更新阶段比例配置
+        setStageRatios(result.stageRatios)
+        // 更新各阶段工作量数据
+        if (result.workloadData) {
+          setStageWorkloadData(result.workloadData)
         }
+        message.success('工作量评估表分析完成，已更新阶段比例配置')
+      } else {
+        message.warning('未从评估表中提取到有效数据')
       }
-    } catch {
-      message.error('上传失败')
+    } catch (error) {
+      console.error('分析Excel文件错误:', error)
+      message.error('分析失败，请检查文件格式')
     }
   }
 
@@ -714,10 +1040,10 @@ export default function CostDeviationInput() {
         taskProgress: projectInfo.devopsProgress
       })
 
-      // 保存基准配置
+      // 保存基准配置（始终传递用户修改后的阶段比例）
       await deviationApi.saveBaseline(currentProjectId, {
         baselineType: baselineMode,
-        expectedStages: baselineMode === 'default' ? stageRatios : undefined,
+        expectedStages: stageRatios,
       })
 
       // 计算偏差
@@ -861,22 +1187,55 @@ export default function CostDeviationInput() {
           <Button
             type="primary"
             size="large"
-            icon={<CheckCircleOutlined />}
+            icon={<CameraOutlined />}
             onClick={handleAiRecognize}
             loading={recognizing}
-            disabled={!projectId || uploading}
+            disabled={screenshotFiles.length === 0 || uploading}
             style={{
               borderRadius: 12,
               height: 44,
               fontWeight: 600,
             }}
           >
-            开始AI识别
+            {recognizing ? '识别中...' : '开始OCR识别'}
           </Button>
-          <Tooltip title="调用本地OCR服务识别截图，提取项目名称、合同金额、人力成本、DevOps进度等信息">
+          <Tooltip title="使用AI大模型识别截图，提取项目名称、合同金额、人力成本、DevOps进度及成员信息">
             <InfoCircleOutlined style={{ color: '#64748b', marginLeft: 12 }} />
           </Tooltip>
         </div>
+
+        {/* OCR成功提示 */}
+        {ocrSuccess && (
+          <Card
+            style={{
+              marginTop: 16,
+              borderRadius: 16,
+              background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(52, 211, 153, 0.08) 100%)',
+              border: '1px solid rgba(16, 185, 129, 0.25)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+              <div
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 10,
+                  background: '#10B981',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <CheckCircleOutlined style={{ fontSize: 20, color: '#fff' }} />
+              </div>
+              <div>
+                <Text strong style={{ fontSize: 14, color: '#10B981' }}>OCR识别成功</Text>
+                <br />
+                <Text type="secondary" style={{ fontSize: 12 }}>已自动填充识别结果，请核对并修正数据</Text>
+              </div>
+            </div>
+          </Card>
+        )}
       </Card>
 
       {/* AI识别状态 */}
@@ -1089,7 +1448,14 @@ export default function CostDeviationInput() {
           <Form.Item label="基准模式选择">
             <Radio.Group
               value={baselineMode}
-              onChange={(e) => setBaselineMode(e.target.value)}
+              onChange={(e) => {
+                const newMode = e.target.value
+                setBaselineMode(newMode)
+                if (newMode === 'default') {
+                  setStageRatios(defaultStageRatios)
+                  setStageWorkloadData({})
+                }
+              }}
               optionType="button"
               buttonStyle="solid"
             >
@@ -1100,6 +1466,14 @@ export default function CostDeviationInput() {
 
           {baselineMode === 'custom' && (
             <Form.Item label="工作量评估表">
+              <Button
+                type="link"
+                icon={<DownloadOutlined />}
+                onClick={handleDownloadTemplate}
+                style={{ marginBottom: 12, paddingLeft: 0 }}
+              >
+                工作量评估表模板下载
+              </Button>
               <Dragger {...baselineUploadProps}>
                 <p className="ant-upload-drag-icon">
                   <InboxOutlined style={{ color: '#F59E0B', fontSize: 32 }} />
@@ -1113,42 +1487,47 @@ export default function CostDeviationInput() {
                 disabled={baselineFileList.length === 0}
                 style={{ marginTop: 12, borderRadius: 8 }}
               >
-                上传评估表
+                分析评估表
               </Button>
             </Form.Item>
           )}
 
-          {baselineMode === 'default' && (
-            <Form.Item label="阶段比例配置">
-              <div style={{ marginBottom: 12 }}>
-                <Tag color={validateStageRatios() ? 'success' : 'warning'}>
-                  比例合计: {stageRatios.reduce((sum, item) => sum + item.ratio, 0)}%
-                </Tag>
-              </div>
-              <Row gutter={[12, 12]}>
-                {stageRatios.map((item, index) => (
-                  <Col xs={8} sm={4} key={item.stage}>
-                    <div style={{ textAlign: 'center' }}>
-                      <Text type="secondary" style={{ fontSize: 12 }}>{item.stage}</Text>
-                      <InputNumber
-                        value={item.ratio}
-                        onChange={(value) => {
-                          const newRatios = [...stageRatios]
-                          newRatios[index].ratio = value || 0
-                          setStageRatios(newRatios)
-                        }}
-                        min={0}
-                        max={100}
-                        size="small"
-                        style={{ width: '100%', marginTop: 4 }}
-                        addonAfter="%"
-                      />
-                    </div>
-                  </Col>
-                ))}
-              </Row>
-            </Form.Item>
-          )}
+          <Form.Item label="阶段比例配置">
+            <div style={{ marginBottom: 12 }}>
+              <Tag color={validateStageRatios() ? 'success' : 'warning'}>
+                比例合计: {stageRatios.reduce((sum, item) => sum + item.ratio, 0)}%
+              </Tag>
+            </div>
+            <Row gutter={[12, 12]}>
+              {stageRatios.map((item, index) => (
+                <Col xs={8} sm={4} key={item.stage}>
+                  <div style={{ textAlign: 'center' }}>
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    {item.stage}
+                    {stageWorkloadData[item.stage] !== undefined && (
+                      <Text style={{ color: '#10B981', marginLeft: 4 }}>
+                        （{stageWorkloadData[item.stage].toFixed(1)}人天）
+                      </Text>
+                    )}
+                  </Text>
+                  <InputNumber
+                    value={item.ratio}
+                    onChange={(value) => {
+                      const newRatios = [...stageRatios]
+                      newRatios[index].ratio = value || 0
+                      setStageRatios(newRatios)
+                    }}
+                    min={0}
+                    max={100}
+                    size="small"
+                    style={{ width: '100%', marginTop: 4 }}
+                    addonAfter="%"
+                  />
+                </div>
+                </Col>
+              ))}
+            </Row>
+          </Form.Item>
 
           <Form.Item label="预期利润空间(%)">
             <div style={{ display: 'flex', alignItems: 'center' }}>

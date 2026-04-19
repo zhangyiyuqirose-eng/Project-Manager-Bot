@@ -113,19 +113,32 @@ const getDeviationStatus = (deviation: number): 'normal' | 'warning' | 'critical
 const generateAiSuggestion = (
   deviation: number,
   stageInfo: StageInfo[],
-  teamCosts: TeamCostInfo[]
+  teamCosts: TeamCostInfo[],
+  projectInfo?: {
+    contractAmount?: number
+    currentProgress?: number
+    plannedTotalCost?: number
+    actualTotalCost?: number
+  }
 ): string => {
   // 计算整体超支/节约情况
   const isOverBudget = deviation > 0
   const absDeviation = Math.abs(deviation)
   
+  // 计算总计划成本和总实际成本
+  const totalPlannedCost = stageInfo.reduce((sum, stage) => sum + (stage.plannedCost || 0), 0)
+  const totalActualCost = stageInfo.reduce((sum, stage) => sum + (stage.actualCost || 0), 0)
+  
   // 找出核心问题阶段（偏差最大的阶段）
   const stageDeviations = stageInfo.map(stage => {
-    if (stage.plannedCost && stage.actualCost) {
+    if (stage.plannedCost && stage.actualCost && totalPlannedCost > 0 && totalActualCost > 0) {
+      const expectedRatio = (stage.plannedCost / totalPlannedCost) * 100
+      const actualRatio = (stage.actualCost / totalActualCost) * 100
+      const deviation = actualRatio - expectedRatio
       return {
         stage: stage.stage,
-        deviation: ((stage.actualCost - stage.plannedCost) / stage.plannedCost) * 100,
-        isOverBudget: stage.actualCost > stage.plannedCost
+        deviation: deviation,
+        isOverBudget: deviation > 0
       }
     }
     return { stage: stage.stage, deviation: 0, isOverBudget: false }
@@ -140,6 +153,12 @@ const generateAiSuggestion = (
   
   // 1. 整体成本偏差总结
   suggestions.push('【整体成本偏差总结】')
+  if (projectInfo) {
+    suggestions.push(`合同金额：${(projectInfo.contractAmount || 0).toFixed(2)}万元`)
+    suggestions.push(`当前进度：${(projectInfo.currentProgress || 0).toFixed(1)}%`)
+    suggestions.push(`计划总成本：${(projectInfo.plannedTotalCost || 0).toFixed(2)}万元`)
+    suggestions.push(`实际总成本：${(projectInfo.actualTotalCost || 0).toFixed(2)}万元`)
+  }
   if (isOverBudget) {
     suggestions.push(`整体成本超支${absDeviation.toFixed(1)}%，需要关注成本控制和资源调配。`)
   } else {
@@ -153,101 +172,143 @@ const generateAiSuggestion = (
   }
   suggestions.push('')
   
-  // 2. 分阶段成本问题诊断
-  suggestions.push('【分阶段成本问题诊断】')
-  for (const stage of stageInfo) {
-    if (stage.plannedCost && stage.actualCost) {
-      const stageDeviation = ((stage.actualCost - stage.plannedCost) / stage.plannedCost) * 100
-      const isOver = stage.actualCost > stage.plannedCost
-      if (Math.abs(stageDeviation) > 5) {
-        let reason = ''
-        if (isOver) {
-          reason = `成本偏高，可能原因：需求变更频繁、设计方案调整过多、开发工作量评估不足、测试轮次增加、部署问题等。`
-        } else {
-          reason = `成本偏低，可能原因：阶段工作量评估过高、资源利用率不足、进度延迟等。`
-        }
-        suggestions.push(`${stage.stage}阶段：${reason}当前偏差${stageDeviation.toFixed(1)}%。`)
-      }
-    }
+  // 2. 差异点分析
+  suggestions.push('【差异点分析】')
+  // 阶段差异
+  const overBudgetStages = stageDeviations.filter(s => s.isOverBudget && Math.abs(s.deviation) > 5)
+  const underBudgetStages = stageDeviations.filter(s => !s.isOverBudget && Math.abs(s.deviation) > 5)
+  
+  if (overBudgetStages.length > 0) {
+    suggestions.push('超支阶段：')
+    overBudgetStages.forEach(stage => {
+      suggestions.push(`  - ${stage.stage}阶段：超支${stage.deviation.toFixed(1)}%`)
+    })
+  }
+  
+  if (underBudgetStages.length > 0) {
+    suggestions.push('节约阶段：')
+    underBudgetStages.forEach(stage => {
+      suggestions.push(`  - ${stage.stage}阶段：节约${Math.abs(stage.deviation).toFixed(1)}%`)
+    })
+  }
+  
+  // 团队差异
+  const overBudgetTeams = teamCosts.filter(t => t.deviationRate > 5)
+  const underBudgetTeams = teamCosts.filter(t => t.deviationRate < -5)
+  
+  if (overBudgetTeams.length > 0) {
+    suggestions.push('超支团队：')
+    overBudgetTeams.forEach(team => {
+      suggestions.push(`  - ${team.team}：超支${team.deviationRate.toFixed(1)}%`)
+    })
+  }
+  
+  if (underBudgetTeams.length > 0) {
+    suggestions.push('节约团队：')
+    underBudgetTeams.forEach(team => {
+      suggestions.push(`  - ${team.team}：节约${Math.abs(team.deviationRate).toFixed(1)}%`)
+    })
   }
   suggestions.push('')
   
-  // 3. 分团队成本问题诊断
-  suggestions.push('【分团队成本问题诊断】')
-  for (const team of teamCosts) {
-    if (Math.abs(team.deviationRate) > 5) {
-      const isOver = team.deviationRate > 0
-      let reason = ''
+  // 3. 人员调整建议
+  suggestions.push('【人员调整建议】')
+  
+  // 需要减人的团队（超支严重）
+  const teamsToReduce = teamCosts.filter(t => t.deviationRate > 15)
+  if (teamsToReduce.length > 0) {
+    suggestions.push('需要减人的团队：')
+    teamsToReduce.forEach(team => {
+      suggestions.push(`  - ${team.team}：超支${team.deviationRate.toFixed(1)}%，建议减少${Math.ceil(team.deviationRate / 20)}人`)
+      // 具体岗位建议
       if (team.team.includes('产品')) {
-        reason = isOver ? '可能原因：需求调研时间超出预期、需求变更频繁、产品方案调整较多。' : '可能原因：需求分析工作量评估过高、人员配置过剩。'
+        suggestions.push('    * 建议减少：初级产品经理、产品助理')
       } else if (team.team.includes('UI')) {
-        reason = isOver ? '可能原因：UI设计轮次过多、界面改动频繁、设计方案反复调整。' : '可能原因：设计效率提升、设计复用率高、人员配置优化。'
+        suggestions.push('    * 建议减少：初级UI设计师')
       } else if (team.team.includes('研发')) {
-        reason = isOver ? '可能原因：代码开发工作量超出预期、技术难题耗时、代码质量有问题导致返工、需求变更影响。' : '可能原因：开发效率提升、技术方案优化、复用代码增加。'
+        suggestions.push('    * 建议减少：初级开发工程师、外包开发人员')
       } else if (team.team.includes('测试')) {
-        reason = isOver ? '可能原因：测试用例执行轮次过多、bug修复返工、测试环境不稳定、回归测试工作量增加。' : '可能原因：测试效率提升、自动化测试覆盖率高、人员配置优化。'
+        suggestions.push('    * 建议减少：初级测试工程师')
       } else if (team.team.includes('项目管理')) {
-        reason = isOver ? '可能原因：项目沟通协调工作量增加、进度管理成本上升、风险管理投入增加。' : '可能原因：项目管理效率提升、流程优化、人员配置合理。'
+        suggestions.push('    * 建议减少：项目助理')
       }
-      suggestions.push(`${team.team}：${reason}当前偏差${team.deviationRate.toFixed(1)}%。`)
+    })
+  }
+  
+  // 需要加人的团队（节约严重但可能影响进度）
+  const teamsToAdd = teamCosts.filter(t => t.deviationRate < -15)
+  if (teamsToAdd.length > 0) {
+    suggestions.push('需要加人的团队：')
+    teamsToAdd.forEach(team => {
+      suggestions.push(`  - ${team.team}：节约${Math.abs(team.deviationRate).toFixed(1)}%，但可能影响进度，建议增加${Math.ceil(Math.abs(team.deviationRate) / 20)}人`)
+      // 具体岗位建议
+      if (team.team.includes('产品')) {
+        suggestions.push('    * 建议增加：资深产品经理')
+      } else if (team.team.includes('UI')) {
+        suggestions.push('    * 建议增加：资深UI设计师')
+      } else if (team.team.includes('研发')) {
+        suggestions.push('    * 建议增加：资深开发工程师、技术专家')
+      } else if (team.team.includes('测试')) {
+        suggestions.push('    * 建议增加：自动化测试工程师')
+      } else if (team.team.includes('项目管理')) {
+        suggestions.push('    * 建议增加：资深项目经理')
+      }
+    })
+  }
+  
+  // 资源倾斜建议
+  if (problemStages.length > 0) {
+    suggestions.push('资源倾斜建议：')
+    suggestions.push(`  - 将优质资源向${problemStages[0].stage}阶段倾斜，优先解决核心瓶颈`)
+    // 具体岗位建议
+    if (problemStages[0].stage.includes('需求')) {
+      suggestions.push('    * 重点补充：产品经理、需求分析师')
+    } else if (problemStages[0].stage.includes('设计')) {
+      suggestions.push('    * 重点补充：UI设计师、UX设计师')
+    } else if (problemStages[0].stage.includes('开发')) {
+      suggestions.push('    * 重点补充：开发工程师、技术专家')
+    } else if (problemStages[0].stage.includes('测试')) {
+      suggestions.push('    * 重点补充：测试工程师、自动化测试专家')
+    } else if (problemStages[0].stage.includes('投产')) {
+      suggestions.push('    * 重点补充：运维工程师、项目管理人员')
     }
   }
   suggestions.push('')
   
-  // 4. 人员调整与资源优化建议
-  suggestions.push('【人员调整与资源优化建议】')
-  suggestions.push('人员编制：')
-  if (isOverBudget && absDeviation > 15) {
-    suggestions.push('  - 评估各团队人员配置必要性，对冗余人员进行合理调配或优化')
-    suggestions.push('  - 高偏差团队暂停新增人员招聘，结合自然离职进行缩编')
-    suggestions.push('  - 考虑将部分非核心工作外包，降低固定人力成本')
-  } else if (absDeviation < 5) {
-    suggestions.push('  - 保持当前人员配置稳定，避免过度扩张')
-    suggestions.push('  - 对于效率高的团队，可考虑适度扩充以提升整体产能')
-  }
-  suggestions.push('')
-  suggestions.push('工作重心倾斜：')
-  if (problemStages.length > 0) {
-    suggestions.push(`  - 将优质资源向${problemStages[0].stage}阶段倾斜，优先解决核心瓶颈`)
-    suggestions.push('  - 建立阶段成本预警机制，避免成本进一步超支')
-  }
-  if (problemTeams.length > 0) {
-    suggestions.push(`  - 重点关注${problemTeams[0].team}团队，分析超支根因并制定改进措施`)
-  }
-  suggestions.push('')
-  suggestions.push('分工优化：')
+  // 4. 效率提升建议
+  suggestions.push('【效率提升建议】')
+  suggestions.push('流程优化：')
   suggestions.push('  - 减少跨团队沟通成本，明确职责边界')
-  suggestions.push('  - 提升代码/设计复用率，避免重复造轮子')
-  suggestions.push('  - 合并相似职责岗位，提升人效')
-  suggestions.push('')
-  suggestions.push('效率改进：')
-  suggestions.push('  - 引入自动化工具提升研发、测试效率')
-  suggestions.push('  - 优化开发流程，减少不必要的审批和等待环节')
-  suggestions.push('  - 对于紧急任务可采用加班策略，长期任务考虑外包')
-  suggestions.push('')
-  suggestions.push('风险控制：')
-  suggestions.push('  - 建立每日/每周成本监控机制，及时发现异常')
-  suggestions.push('  - 预留应急预算应对后续阶段可能的风险')
-  suggestions.push('  - 加强需求变更评审，避免频繁变更导致的成本增加')
+  suggestions.push('  - 简化审批流程，减少不必要的等待环节')
+  suggestions.push('  - 建立快速决策机制，避免决策延迟')
+  
+  suggestions.push('工具与技术：')
+  suggestions.push('  - 引入自动化测试工具，减少手动测试工作量')
+  suggestions.push('  - 使用代码生成工具，提高开发效率')
+  suggestions.push('  - 采用敏捷开发方法，缩短迭代周期')
+  
+  suggestions.push('团队管理：')
+  suggestions.push('  - 加强团队培训，提升技能水平')
+  suggestions.push('  - 建立激励机制，提高团队积极性')
+  suggestions.push('  - 定期举行技术分享，促进知识共享')
   suggestions.push('')
   
-  // 5. 短期+中长期执行方案
-  suggestions.push('【短期+中长期执行方案】')
-  suggestions.push('立即执行（1周内）：')
+  // 5. 执行计划
+  suggestions.push('【执行计划】')
+  suggestions.push('近期（1-2周）：')
   suggestions.push('  - 召开成本分析会议，明确各团队超支原因')
-  suggestions.push('  - 暂停非必要新增需求，冻结部分预算')
-  suggestions.push('  - 制定紧急成本控制措施，设置成本上限')
-  suggestions.push('')
-  suggestions.push('阶段执行（当前里程碑内）：')
-  suggestions.push('  - 每周监控成本消耗情况，设置偏差预警线')
-  suggestions.push('  - 优化高偏差阶段的资源配置和工作流程')
-  suggestions.push('  - 定期回顾成本偏差，及时调整策略')
-  suggestions.push('')
-  suggestions.push('长期优化（项目全周期）：')
-  suggestions.push('  - 建立完善的项目成本估算体系')
-  suggestions.push('  - 制定成本绩效考核机制，将成本控制与团队绩效挂钩')
+  suggestions.push('  - 制定人员调整计划，确定具体调整方案')
+  suggestions.push('  - 优化高偏差阶段的工作流程')
+  
+  suggestions.push('中期（1-2个月）：')
+  suggestions.push('  - 实施人员调整，确保资源合理配置')
+  suggestions.push('  - 监控成本消耗情况，设置偏差预警线')
+  suggestions.push('  - 评估效率提升措施的效果')
+  
+  suggestions.push('长期（项目全周期）：')
+  suggestions.push('  - 建立完善的成本估算体系')
+  suggestions.push('  - 持续优化开发流程，提升整体效率')
   suggestions.push('  - 积累成本数据，为后续项目提供参考')
-  suggestions.push('  - 持续优化开发、测试流程，提升整体人效')
   
   return suggestions.join('\n')
 }
@@ -300,11 +361,22 @@ const calculateTeamCosts = (
     }
   ]
 
+  // 计算所有团队的总计划成本和总实际成本
+  const totalPlannedCost = teams.reduce((sum, team) => sum + team.expectedFormula(expectedStageCosts), 0)
+  const totalActualCost = teams.reduce((sum, team) => sum + team.actualFormula(roleCosts), 0)
+
   return teams.map(team => {
     const plannedCost = team.expectedFormula(expectedStageCosts)
     const actualCost = team.actualFormula(roleCosts)
     const deviation = actualCost - plannedCost
-    const deviationRate = plannedCost > 0 ? (deviation / plannedCost) * 100 : 0
+    
+    // 使用实际消耗占比和预期消耗占比计算偏差率
+    let deviationRate = 0
+    if (totalPlannedCost > 0 && totalActualCost > 0) {
+      const expectedRatio = (plannedCost / totalPlannedCost) * 100
+      const actualRatio = (actualCost / totalActualCost) * 100
+      deviationRate = actualRatio - expectedRatio
+    }
 
     return {
       team: team.name,
@@ -675,108 +747,68 @@ router.post('/:projectId/calculate', authMiddleware, async (req: Request, res: R
       return
     }
 
-    // 计算预期成本（合同总金额去掉利润空间后，按照系统默认比例计算）
+    // 计算预期成本（合同总金额去掉利润空间后，按照用户保存的阶段比例计算）
     const profitMargin = 0.20 // 默认20%利润空间
     const expectedTotalCost = deviation.totalContractAmount * (1 - profitMargin)
     const expectedCostConsumption = expectedTotalCost * (deviation.taskProgress / 100)
 
-    // 构建实际阶段数据，使用新的阶段名称
-    const actualStages: StageInfo[] = [
-      {
-        stage: '需求',
-        ratio: 15,
-        plannedProgress: 100,
-        actualProgress: deviation.taskProgress,
-        plannedCost: expectedCostConsumption * 0.15,
-        actualCost: stageCosts['需求'] || 0
-      },
-      {
-        stage: '设计',
-        ratio: 20,
-        plannedProgress: 100,
-        actualProgress: deviation.taskProgress,
-        plannedCost: expectedCostConsumption * 0.20,
-        actualCost: stageCosts['设计'] || 0
-      },
-      {
-        stage: '开发',
-        ratio: 35,
-        plannedProgress: 100,
-        actualProgress: deviation.taskProgress,
-        plannedCost: expectedCostConsumption * 0.35,
-        actualCost: stageCosts['开发'] || 0
-      },
-      {
-        stage: '技术测试',
-        ratio: 15,
-        plannedProgress: 100,
-        actualProgress: deviation.taskProgress,
-        plannedCost: expectedCostConsumption * 0.15,
-        actualCost: stageCosts['技术测试'] || 0
-      },
-      {
-        stage: '性能测试',
-        ratio: 5,
-        plannedProgress: 100,
-        actualProgress: deviation.taskProgress,
-        plannedCost: expectedCostConsumption * 0.05,
-        actualCost: stageCosts['性能测试'] || 0
-      },
-      {
-        stage: '投产',
-        ratio: 10,
-        plannedProgress: 100,
-        actualProgress: deviation.taskProgress,
-        plannedCost: expectedCostConsumption * 0.10,
-        actualCost: stageCosts['投产'] || 0
-      }
+    // 读取用户保存的阶段比例
+    let userExpectedStages: StageInfo[] = []
+    try {
+      userExpectedStages = JSON.parse(deviation.expectedStages || '[]')
+    } catch (error) {
+      console.error('解析预期阶段数据失败:', error)
+    }
+
+    // 如果没有用户保存的阶段比例，使用默认值
+    const defaultStages = [
+      { stage: '需求', ratio: 15 },
+      { stage: '设计', ratio: 20 },
+      { stage: '开发', ratio: 35 },
+      { stage: '技术测试', ratio: 15 },
+      { stage: '性能测试', ratio: 5 },
+      { stage: '投产', ratio: 10 }
     ]
 
-    // 构建预期阶段数据，使用新的阶段名称
-    const expectedStages: StageInfo[] = [
-      {
-        stage: '需求',
-        ratio: 15,
-        plannedProgress: 100,
-        actualProgress: 0,
-        plannedCost: expectedCostConsumption * 0.15
-      },
-      {
-        stage: '设计',
-        ratio: 20,
-        plannedProgress: 100,
-        actualProgress: 0,
-        plannedCost: expectedCostConsumption * 0.20
-      },
-      {
-        stage: '开发',
-        ratio: 35,
-        plannedProgress: 100,
-        actualProgress: 0,
-        plannedCost: expectedCostConsumption * 0.35
-      },
-      {
-        stage: '技术测试',
-        ratio: 15,
-        plannedProgress: 100,
-        actualProgress: 0,
-        plannedCost: expectedCostConsumption * 0.15
-      },
-      {
-        stage: '性能测试',
-        ratio: 5,
-        plannedProgress: 100,
-        actualProgress: 0,
-        plannedCost: expectedCostConsumption * 0.05
-      },
-      {
-        stage: '投产',
-        ratio: 10,
-        plannedProgress: 100,
-        actualProgress: 0,
-        plannedCost: expectedCostConsumption * 0.10
+    // 构建阶段数据，优先使用用户保存的比例
+    const buildStageData = (isActual: boolean) => {
+      // 如果有用户保存的阶段比例，使用用户的比例
+      if (userExpectedStages && userExpectedStages.length > 0) {
+        return userExpectedStages.map((userStage) => {
+          const ratio = userStage.ratio || 0
+          const ratioDecimal = ratio / 100
+
+          return {
+            stage: userStage.stage,
+            ratio,
+            plannedProgress: 100,
+            actualProgress: isActual ? deviation.taskProgress : 0,
+            plannedCost: expectedCostConsumption * ratioDecimal,
+            actualCost: isActual ? (stageCosts[userStage.stage] || 0) : 0
+          }
+        })
       }
-    ]
+      // 否则使用默认比例
+      return defaultStages.map((defaultStage) => {
+        const ratio = defaultStage.ratio
+        const ratioDecimal = ratio / 100
+
+        return {
+          stage: defaultStage.stage,
+          ratio,
+          plannedProgress: 100,
+          actualProgress: isActual ? deviation.taskProgress : 0,
+          plannedCost: expectedCostConsumption * ratioDecimal,
+          actualCost: isActual ? (stageCosts[defaultStage.stage] || 0) : 0
+        }
+      })
+    }
+
+    // 构建实际阶段数据
+    const actualStages: StageInfo[] = buildStageData(true)
+
+    // 构建预期阶段数据
+    const expectedStages: StageInfo[] = buildStageData(false)
 
     // 计算成本偏差
     const costConsumptionRate = expectedTotalCost > 0
@@ -800,7 +832,12 @@ router.post('/:projectId/calculate', authMiddleware, async (req: Request, res: R
     const teamCosts = calculateTeamCosts(expectedStages, actualStages, stageCosts, roleCosts, expectedCostConsumption)
 
     // 生成AI建议
-    const aiSuggestion = generateAiSuggestion(costDeviation, actualStages, teamCosts)
+    const aiSuggestion = generateAiSuggestion(costDeviation, actualStages, teamCosts, {
+      contractAmount: deviation.totalContractAmount,
+      currentProgress: deviation.taskProgress,
+      plannedTotalCost: expectedCostConsumption,
+      actualTotalCost: totalCost
+    })
 
     // 更新偏差记录
     await prisma.costDeviation.update({
@@ -888,8 +925,17 @@ router.get('/:projectId/suggestion', authMiddleware, async (req: Request, res: R
       const expectedStages: StageInfo[] = JSON.parse(deviation.expectedStages || '[]')
       const actualStages: StageInfo[] = JSON.parse(deviation.actualStages || '[]')
       const teamCosts: TeamCostInfo[] = JSON.parse(deviation.teamCosts || '[]')
+      
+      // 计算预期成本和实际成本
+      const expectedCostConsumption = deviation.currentCostConsumption || 0
+      const actualTotalCost = deviation.currentCostConsumption || 0
 
-      aiSuggestion = generateAiSuggestion(deviation.costDeviation, actualStages, teamCosts)
+      aiSuggestion = generateAiSuggestion(deviation.costDeviation, actualStages, teamCosts, {
+        contractAmount: deviation.totalContractAmount,
+        currentProgress: deviation.taskProgress,
+        plannedTotalCost: expectedCostConsumption,
+        actualTotalCost: actualTotalCost
+      })
 
       // 更新记录
       await prisma.costDeviation.update({
@@ -948,108 +994,68 @@ router.get('/:projectId/result', authMiddleware, async (req: Request, res: Respo
       }
     }
 
-    // 计算预期成本（合同总金额去掉利润空间后，按照系统默认比例计算）
+    // 计算预期成本（合同总金额去掉利润空间后，按照用户保存的阶段比例计算）
     const profitMargin = 0.20 // 默认20%利润空间
     const expectedTotalCost = deviation.totalContractAmount * (1 - profitMargin)
     const expectedCostConsumption = expectedTotalCost * (deviation.taskProgress / 100)
 
-    // 构建实际阶段数据，使用新的阶段名称
-    const actualStages: StageInfo[] = [
-      {
-        stage: '需求',
-        ratio: 15,
-        plannedProgress: 100,
-        actualProgress: deviation.taskProgress,
-        plannedCost: expectedCostConsumption * 0.15,
-        actualCost: stageCosts['需求'] || 0
-      },
-      {
-        stage: '设计',
-        ratio: 20,
-        plannedProgress: 100,
-        actualProgress: deviation.taskProgress,
-        plannedCost: expectedCostConsumption * 0.20,
-        actualCost: stageCosts['设计'] || 0
-      },
-      {
-        stage: '开发',
-        ratio: 35,
-        plannedProgress: 100,
-        actualProgress: deviation.taskProgress,
-        plannedCost: expectedCostConsumption * 0.35,
-        actualCost: stageCosts['开发'] || 0
-      },
-      {
-        stage: '技术测试',
-        ratio: 15,
-        plannedProgress: 100,
-        actualProgress: deviation.taskProgress,
-        plannedCost: expectedCostConsumption * 0.15,
-        actualCost: stageCosts['技术测试'] || 0
-      },
-      {
-        stage: '性能测试',
-        ratio: 5,
-        plannedProgress: 100,
-        actualProgress: deviation.taskProgress,
-        plannedCost: expectedCostConsumption * 0.05,
-        actualCost: stageCosts['性能测试'] || 0
-      },
-      {
-        stage: '投产',
-        ratio: 10,
-        plannedProgress: 100,
-        actualProgress: deviation.taskProgress,
-        plannedCost: expectedCostConsumption * 0.10,
-        actualCost: stageCosts['投产'] || 0
-      }
+    // 读取用户保存的阶段比例
+    let userExpectedStages: StageInfo[] = []
+    try {
+      userExpectedStages = JSON.parse(deviation.expectedStages || '[]')
+    } catch (error) {
+      console.error('解析预期阶段数据失败:', error)
+    }
+
+    // 如果没有用户保存的阶段比例，使用默认值
+    const defaultStages = [
+      { stage: '需求', ratio: 15 },
+      { stage: '设计', ratio: 20 },
+      { stage: '开发', ratio: 35 },
+      { stage: '技术测试', ratio: 15 },
+      { stage: '性能测试', ratio: 5 },
+      { stage: '投产', ratio: 10 }
     ]
 
-    // 构建预期阶段数据，使用新的阶段名称
-    const expectedStages: StageInfo[] = [
-      {
-        stage: '需求',
-        ratio: 15,
-        plannedProgress: 100,
-        actualProgress: 0,
-        plannedCost: expectedCostConsumption * 0.15
-      },
-      {
-        stage: '设计',
-        ratio: 20,
-        plannedProgress: 100,
-        actualProgress: 0,
-        plannedCost: expectedCostConsumption * 0.20
-      },
-      {
-        stage: '开发',
-        ratio: 35,
-        plannedProgress: 100,
-        actualProgress: 0,
-        plannedCost: expectedCostConsumption * 0.35
-      },
-      {
-        stage: '技术测试',
-        ratio: 15,
-        plannedProgress: 100,
-        actualProgress: 0,
-        plannedCost: expectedCostConsumption * 0.15
-      },
-      {
-        stage: '性能测试',
-        ratio: 5,
-        plannedProgress: 100,
-        actualProgress: 0,
-        plannedCost: expectedCostConsumption * 0.05
-      },
-      {
-        stage: '投产',
-        ratio: 10,
-        plannedProgress: 100,
-        actualProgress: 0,
-        plannedCost: expectedCostConsumption * 0.10
+    // 构建阶段数据，优先使用用户保存的比例
+    const buildStageData = (isActual: boolean) => {
+      // 如果有用户保存的阶段比例，使用用户的比例
+      if (userExpectedStages && userExpectedStages.length > 0) {
+        return userExpectedStages.map((userStage) => {
+          const ratio = userStage.ratio || 0
+          const ratioDecimal = ratio / 100
+
+          return {
+            stage: userStage.stage,
+            ratio,
+            plannedProgress: 100,
+            actualProgress: isActual ? deviation.taskProgress : 0,
+            plannedCost: expectedCostConsumption * ratioDecimal,
+            actualCost: isActual ? (stageCosts[userStage.stage] || 0) : 0
+          }
+        })
       }
-    ]
+      // 否则使用默认比例
+      return defaultStages.map((defaultStage) => {
+        const ratio = defaultStage.ratio
+        const ratioDecimal = ratio / 100
+
+        return {
+          stage: defaultStage.stage,
+          ratio,
+          plannedProgress: 100,
+          actualProgress: isActual ? deviation.taskProgress : 0,
+          plannedCost: expectedCostConsumption * ratioDecimal,
+          actualCost: isActual ? (stageCosts[defaultStage.stage] || 0) : 0
+        }
+      })
+    }
+
+    // 构建实际阶段数据
+    const actualStages: StageInfo[] = buildStageData(true)
+
+    // 构建预期阶段数据
+    const expectedStages: StageInfo[] = buildStageData(false)
 
     // 计算成本偏差
     const costConsumptionRate = expectedTotalCost > 0
@@ -1062,7 +1068,12 @@ router.get('/:projectId/result', authMiddleware, async (req: Request, res: Respo
     const teamCosts = calculateTeamCosts(expectedStages, actualStages, stageCosts, roleCosts, expectedCostConsumption)
 
     // 生成AI建议
-    const aiSuggestion = generateAiSuggestion(costDeviation, actualStages, teamCosts)
+    const aiSuggestion = generateAiSuggestion(costDeviation, actualStages, teamCosts, {
+      contractAmount: deviation.totalContractAmount,
+      currentProgress: deviation.taskProgress,
+      plannedTotalCost: expectedCostConsumption,
+      actualTotalCost: totalCost
+    })
 
     // 更新偏差记录
     await prisma.costDeviation.update({

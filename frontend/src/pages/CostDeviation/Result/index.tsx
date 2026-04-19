@@ -582,11 +582,15 @@ export default function CostDeviationResult() {
     },
     {
       title: '偏差',
-      dataIndex: 'deviationRate',
-      key: 'deviationRate',
+      key: 'deviation',
       width: 100,
-      render: (value: number) => {
-        const status = getDeviationStatus(value || 0)
+      render: (_: any, record: TeamCost) => {
+        const totalExpectedCost = result?.teamCosts?.reduce((sum, team) => sum + (team.plannedCost || 0), 0) || 0
+        const totalActualCost = result?.teamCosts?.reduce((sum, team) => sum + (team.actualCost || 0), 0) || 0
+        const expectedRatio = totalExpectedCost > 0 ? (record.plannedCost || 0) / totalExpectedCost : 0
+        const actualRatio = totalActualCost > 0 ? (record.actualCost || 0) / totalActualCost : 0
+        const deviation = (actualRatio - expectedRatio) * 100
+        const status = getDeviationStatus(deviation)
         return (
           <Tag
             style={{
@@ -596,7 +600,7 @@ export default function CostDeviationResult() {
               border: 'none',
             }}
           >
-            {typeof value === 'number' ? value.toFixed(1) : '-'}%
+            {deviation.toFixed(1)}%
           </Tag>
         )
       },
@@ -931,7 +935,7 @@ export default function CostDeviationResult() {
         </Card>
       )}
 
-      {/* 成本消耗与任务进度对比条形图 */}
+      {/* 成本消耗与任务进度对比 */}
       <Card
         style={{
           borderRadius: 20,
@@ -946,7 +950,34 @@ export default function CostDeviationResult() {
           </Title>
           <Text type="secondary">对比当前成本消耗与任务进度对应的预期成本消耗，判断是否存在超前或滞后消耗</Text>
         </div>
-        <Column {...progressComparisonConfig} height={200} />
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+            <Text style={{ fontWeight: 500 }}>成本消耗</Text>
+            <Text style={{ color: '#3B82F6', fontWeight: 500 }}>
+              {(result?.currentCostConsumption || 0).toFixed(2)}万
+            </Text>
+          </div>
+          <Progress
+            percent={parseFloat((((result?.currentCostConsumption || 0) / ((result?.totalContractAmount || 0) * (1 - expectedProfit / 100)) * 100) || 0).toFixed(2))}
+            strokeColor="#3B82F6"
+            strokeWidth={12}
+            style={{ borderRadius: 6 }}
+          />
+        </div>
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+            <Text style={{ fontWeight: 500 }}>任务进度</Text>
+            <Text style={{ color: '#10B981', fontWeight: 500 }}>
+              {result?.taskProgress?.toFixed(1)}%
+            </Text>
+          </div>
+          <Progress
+            percent={result?.taskProgress || 0}
+            strokeColor="#10B981"
+            strokeWidth={12}
+            style={{ borderRadius: 6 }}
+          />
+        </div>
       </Card>
 
       {/* 各阶段成本对比 */}
@@ -966,12 +997,11 @@ export default function CostDeviationResult() {
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginBottom: 24 }}>
           {result.actualStages?.map((stage) => {
-            // 计算实际占比和预期占比
-            const actualRatio = totalActualCost > 0 ? (stage.actualCost || 0) / totalActualCost : 0
-            const expectedRatio = (stage.ratio || 0) / 100 // 转换为小数
-            // 计算偏差：实际占比 - 预期占比
-            const deviation = (actualRatio - expectedRatio) * 100
-            const status = getDeviationStatus(deviation)
+            // 计算偏差：实际成本 - 预算成本
+            const deviation = (stage.actualCost || 0) - (stage.plannedCost || 0)
+            const isSave = deviation < 0
+            const text = isSave ? `节省${Math.abs(deviation).toFixed(2)}万元` : `超出${deviation.toFixed(2)}万元`
+            const color = isSave ? '#10B981' : '#EF4444'
             return (
               <Card
                 key={stage.stage}
@@ -995,17 +1025,7 @@ export default function CostDeviationResult() {
                 </div>
                 <div>
                   <Text type="secondary" style={{ fontSize: 12 }}>偏差：</Text>
-                  <Tag
-                    style={{
-                      borderRadius: 6,
-                      background: `${status.color}15`,
-                      color: status.color,
-                      border: 'none',
-                      fontSize: 12,
-                    }}
-                  >
-                    {deviation > 0 ? '+' : ''}{typeof deviation === 'number' ? deviation.toFixed(1) : '0.0'}%
-                  </Tag>
+                  <Text style={{ color }}>{text}</Text>
                 </div>
               </Card>
             )
@@ -1102,7 +1122,11 @@ export default function CostDeviationResult() {
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginBottom: 24 }}>
           {result.teamCosts?.map((team) => {
-            const status = getDeviationStatus(team.deviationRate)
+            // 计算偏差：实际成本 - 预算成本
+            const deviation = (team.actualCost || 0) - (team.plannedCost || 0)
+            const isSave = deviation < 0
+            const text = isSave ? `节省${Math.abs(deviation).toFixed(2)}万元` : `超出${deviation.toFixed(2)}万元`
+            const color = isSave ? '#10B981' : '#EF4444'
             return (
               <Card
                 key={team.team}
@@ -1126,17 +1150,7 @@ export default function CostDeviationResult() {
                 </div>
                 <div>
                   <Text type="secondary" style={{ fontSize: 12 }}>偏差：</Text>
-                  <Tag
-                    style={{
-                      borderRadius: 6,
-                      background: `${status.color}15`,
-                      color: status.color,
-                      border: 'none',
-                      fontSize: 12,
-                    }}
-                  >
-                    {typeof team.deviationRate === 'number' ? team.deviationRate.toFixed(1) : '0.0'}%
-                  </Tag>
+                  <Text style={{ color }}>{text}</Text>
                 </div>
               </Card>
             )
@@ -1174,7 +1188,12 @@ export default function CostDeviationResult() {
               style={{ borderRadius: 12, border: '1px solid #f1f5f9' }}
             >
               {result.teamCosts?.map((team) => {
-                const status = getDeviationStatus(team.deviationRate)
+                const totalExpectedCost = result?.teamCosts?.reduce((sum, t) => sum + (t.plannedCost || 0), 0) || 0
+                const totalActualCost = result?.teamCosts?.reduce((sum, t) => sum + (t.actualCost || 0), 0) || 0
+                const expectedRatio = totalExpectedCost > 0 ? (team.plannedCost || 0) / totalExpectedCost : 0
+                const actualRatio = totalActualCost > 0 ? (team.actualCost || 0) / totalActualCost : 0
+                const deviation = (actualRatio - expectedRatio) * 100
+                const status = getDeviationStatus(deviation)
                 return (
                   <div
                     key={team.team}
@@ -1195,7 +1214,7 @@ export default function CostDeviationResult() {
                         border: 'none',
                       }}
                     >
-                      偏差 {typeof team.deviationRate === 'number' ? team.deviationRate.toFixed(1) : '0.0'}%
+                      偏差 {deviation.toFixed(1)}%
                     </Tag>
                   </div>
                 )

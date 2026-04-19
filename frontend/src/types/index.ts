@@ -184,10 +184,12 @@ export interface TeamMember {
   reportedHours?: number
 }
 
-export type MemberLevel = 'P5' | 'P6' | 'P7' | 'P8'
+export type MemberLevel = 'P3' | 'P4' | 'P5' | 'P6' | 'P7' | 'P8'
 
 // 成员等级对应的日成本（万元）
 export const MEMBER_LEVEL_DAILY_COST: Record<MemberLevel, number> = {
+  P3: 0.08,
+  P4: 0.11,
   P5: 0.16,
   P6: 0.21,
   P7: 0.26,
