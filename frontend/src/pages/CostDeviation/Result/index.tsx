@@ -278,109 +278,128 @@ export default function CostDeviationResult() {
   const totalActualCost = result?.actualStages?.reduce((sum, stage) => sum + (stage.actualCost || 0), 0) || 0
   const totalExpectedCost = result?.expectedStages?.reduce((sum, stage) => sum + (stage.plannedCost || 0), 0) || 0
   
-  // 各阶段成本偏差折线图配置
-  const stageLineConfig = {
-    data: [
-      // 实际成本占比（蓝色）
-      ...projectStages.map((stage) => {
-        const actualStage = result?.actualStages?.find(s => s.stage === stage)
-        const actualCost = actualStage?.actualCost || 0
-        const actualRatio = totalActualCost > 0 ? actualCost / totalActualCost : 0
-        return {
-          stage,
-          type: '实际成本占比',
-          value: actualRatio * 100,
-          actualCost,
-        }
-      }),
-      // 预期成本占比（红色）
-      ...projectStages.map((stage, index) => {
-        const expectedStage = result?.expectedStages?.find(s => s.stage === stage)
-        const expectedCost = expectedStage?.plannedCost || 0
-        const expectedRatio = totalExpectedCost > 0 ? expectedCost / totalExpectedCost : [0.15, 0.2, 0.35, 0.15, 0.05, 0.1][index]
-        return {
-          stage,
-          type: '预期成本占比',
-          value: expectedRatio * 100,
-        }
-      }),
-    ],
-    xField: 'stage',
-    yField: 'value',
-    seriesField: 'type',
-    color: ['#3B82F6', '#EF4444'],
-    legend: {
-      position: 'bottom' as const,
-      align: 'center' as const,
-    },
-    smooth: true,
-    point: {
-      size: 6,
-      shape: (datum: any) => datum.type === '实际成本占比' ? 'circle' : 'square',
-    },
-    label: {
-      position: 'top' as const,
-      style: {
-        fontSize: 10,
-      },
-      formatter: ({ value }: { value: number }) => typeof value === 'number' ? `${value.toFixed(1)}%` : '-',
-    },
-    meta: {
-      stage: { alias: '阶段' },
-      value: { alias: '占比(%)' },
-      type: { alias: '类型' },
-    },
-    lineStyle: (datum: any) => {
+// 各阶段成本偏差折线图配置
+const stageLineConfig = {
+  data: [
+    // 预期成本占比（深蓝色）
+    ...projectStages.map((stage, index) => {
+      const expectedStage = result?.expectedStages?.find(s => s.stage === stage)
+      const expectedCost = expectedStage?.plannedCost || 0
+      const expectedRatio = totalExpectedCost > 0 ? expectedCost / totalExpectedCost : [0.15, 0.2, 0.35, 0.15, 0.05, 0.1][index]
       return {
-        stroke: datum.type === '实际成本占比' ? '#3B82F6' : '#EF4444',
-        lineWidth: 2,
-        type: datum.type === '实际成本占比' ? 'solid' : 'dashed',
+        stage,
+        type: '预期成本占比',
+        value: expectedRatio * 100,
       }
+    }),
+    // 实际成本占比（亮橙色）
+    ...projectStages.map((stage) => {
+      const actualStage = result?.actualStages?.find(s => s.stage === stage)
+      const actualCost = actualStage?.actualCost || 0
+      const actualRatio = totalActualCost > 0 ? actualCost / totalActualCost : 0
+      return {
+        stage,
+        type: '实际成本占比',
+        value: actualRatio * 100,
+        actualCost,
+      }
+    }),
+  ],
+  xField: 'stage',
+  yField: 'value',
+  seriesField: 'type',
+  colorField: 'type',
+  // 修复1：color改为G2Plot支持的回调写法，精准匹配系列颜色
+  color: (seriesName: string) => {
+    console.log("seriesName======", seriesName);
+    return seriesName === '预期成本占比' ? '#1E40AF' : '#F97316'
+  },
+  // 修复2：legend改为全版本兼容的右上角写法
+  legend: {
+    position: 'top' as const,
+    align: 'right' as const,
+    layout: 'horizontal' as const,
+    itemSpacing: 12,
+    itemName: {
+      fontSize: 12,
+      fontWeight: 500,
     },
-    tooltip: {
-          trigger: 'axis' as const,
-          formatter: (datum: any[]) => {
-            if (!datum || datum.length === 0) return ''
-            const stage = datum[0]?.data?.stage || ''
-            const actualDatum = datum.find(d => d.seriesName === '实际成本占比')
-            const expectedDatum = datum.find(d => d.seriesName === '预期成本占比')
-            const actualCost = actualDatum?.data?.actualCost || 0
-            const actualRatio = actualDatum?.value || 0
-            const expectedRatio = expectedDatum?.value || 0
-            
-            // 找到对应阶段的预期成本
-            const expectedStage = result?.expectedStages?.find(s => s.stage === stage)
-            const expectedCost = expectedStage?.plannedCost || 0
-            
-            return (
-              <div style={{ padding: 12, backgroundColor: 'white', borderRadius: 8, boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}>
-                <div style={{ marginBottom: 8, fontWeight: 'bold', color: '#1E293B' }}>当前阶段: {stage}</div>
-                <div style={{ marginBottom: 4, color: '#3B82F6' }}>
-                  实际成本: {typeof actualCost === 'number' ? actualCost.toFixed(2) : '0.00'}万
-                </div>
-                <div style={{ marginBottom: 4, color: '#3B82F6' }}>
-                  占比: {typeof actualRatio === 'number' ? actualRatio.toFixed(2) : '0.00'}%
-                </div>
-                <div style={{ marginBottom: 4, color: '#EF4444' }}>
-                  预期成本: {typeof expectedCost === 'number' ? expectedCost.toFixed(2) : '0.00'}万
-                </div>
-                <div style={{ color: '#EF4444' }}>
-                  占比: {typeof expectedRatio === 'number' ? expectedRatio.toFixed(2) : '0.00'}%
-                </div>
-              </div>
-            )
-          },
-        },
-    yAxis: {
-      min: 0,
-      max: 100,
-      tickCount: 6,
-      label: {
-        formatter: (value: number) => `${value}%`,
-      },
+    itemMarker: {
+      size: 8,
     },
-  }
+  },
+  smooth: true,
+  point: {
+    size: 6,
+    shape: (datum: any) => datum.type === '预期成本占比' ? 'circle' : 'square',
+  },
+  label: {
+    position: 'top' as const,
+    style: {
+      fontSize: 10,
+    },
+    formatter: ({ value }: { value: number }) => typeof value === 'number' ? `${value.toFixed(1)}%` : '-',
+  },
+  meta: {
+    stage: { alias: '阶段' },
+    value: { alias: '占比(%)' },
+    type: { alias: '类型' },
+  },
+  scale: { color: { range: ['#1E40AF', '#F97316'] } },
+  // 修复3：lineStyle改为按系列匹配，修正虚线属性名
+  lineStyle: (datum: any) => {
+    console.log("datum", datum);
+    const isExpected = datum.type === '预期成本占比'
+    return {
+      lineWidth: 2,
+      // 虚线用lineDash属性，[实线长度, 空白长度]，实线无需设置
+      lineDash: isExpected ? undefined : [4, 4],
+    }
+  },
+  tooltip: {
+    trigger: 'axis' as const,
+    formatter: (datum: any[]) => {
+      if (!datum || datum.length === 0) return ''
+      const stage = datum[0]?.data?.stage || ''
+      const actualDatum = datum.find(d => d.seriesName === '实际成本占比')
+      const expectedDatum = datum.find(d => d.seriesName === '预期成本占比')
+      const actualCost = actualDatum?.data?.actualCost || 0
+      const actualRatio = actualDatum?.value || 0
+      const expectedRatio = expectedDatum?.value || 0
+      
+      // 找到对应阶段的预期成本
+      const expectedStage = result?.expectedStages?.find(s => s.stage === stage)
+      const expectedCost = expectedStage?.plannedCost || 0
+      
+      return (
+        <div style={{ padding: 12, backgroundColor: 'white', borderRadius: 8, boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}>
+          <div style={{ marginBottom: 8, fontWeight: 'bold', color: '#1E293B' }}>当前阶段: {stage}</div>
+          <div style={{ marginBottom: 4, color: '#F97316' }}>
+            实际成本: {typeof actualCost === 'number' ? actualCost.toFixed(2) : '0.00'}万
+          </div>
+          <div style={{ marginBottom: 4, color: '#F97316' }}>
+            占比: {typeof actualRatio === 'number' ? actualRatio.toFixed(2) : '0.00'}%
+          </div>
+          <div style={{ marginBottom: 4, color: '#1E40AF' }}>
+            预期成本: {typeof expectedCost === 'number' ? expectedCost.toFixed(2) : '0.00'}万
+          </div>
+          <div style={{ color: '#1E40AF' }}>
+            占比: {typeof expectedRatio === 'number' ? expectedRatio.toFixed(2) : '0.00'}%
+          </div>
+        </div>
+      )
+    },
+  },
+  yAxis: {
+    min: 0,
+    max: 100,
+    tickCount: 6,
+    label: {
+      formatter: (value: number) => `${value}%`,
+    },
+  },
 
+}
   // 各团队成本双柱形图配置
   const teamColumnConfig = {
     data: [
@@ -821,7 +840,7 @@ export default function CostDeviationResult() {
             tooltip="成本偏差 = 成本消耗/(合同金额*(1-利润空间)) - 任务进度"
           />
         </div>
-        <style jsx>{`
+        <style>{`
           @media (max-width: 1440px) {
             div[style*="calc(20% - 10px)"] {
               width: calc(25% - 9px);
@@ -1050,7 +1069,7 @@ export default function CostDeviationResult() {
         </div>
         <Row gutter={24}>
           <Col xs={24} lg={16}>
-            <Line {...stageLineConfig} height={300} />
+            <Line {...stageLineConfig} height={300} /> 
           </Col>
           <Col xs={24} lg={8}>
             <Card

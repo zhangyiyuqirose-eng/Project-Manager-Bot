@@ -218,6 +218,8 @@ export interface StageCost {
   actualCost: number
   actualRatio: number
   deviation: number
+  ratio: number
+  plannedCost: number
 }
 
 export interface TeamCost {
@@ -225,6 +227,7 @@ export interface TeamCost {
   expectedCost: number
   actualCost: number
   deviation: number
+  plannedCost: number
 }
 
 // 成本偏差录入页相关类型
