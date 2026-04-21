@@ -77,6 +77,7 @@ export default function CostEstimateProjectInfo() {
 
     setSaving(true)
     try {
+      // 跳转到AI分析页面，传递项目ID和团队规模
       navigate(`/cost-estimate/ai-analysis?projectId=${projectId}&teamSize=${teamSize}`)
     } catch {
       message.error('操作失败')

@@ -115,10 +115,17 @@ export default function CostEstimateAIAnalysis() {
               totalModules: modules.length,
               totalFunctions
             })
+          } else {
+            // 如果没有解析结果，自动开始解析
+            handleParse()
           }
+        } else {
+          // 如果获取解析结果失败，自动开始解析
+          handleParse()
         }
       } catch {
-        // 静默处理
+        // 如果请求失败，自动开始解析
+        handleParse()
       } finally {
         setLoading(false)
       }
@@ -570,22 +577,15 @@ export default function CostEstimateAIAnalysis() {
             <ArrowLeftOutlined style={{ marginRight: 8 }} />
             上一步
           </Button>
-          <div style={{ display: 'flex', gap: 12 }}>
-            {(!parseResult || parseResult.modules.length === 0) && (
-              <Button onClick={handleParse} loading={parsing} style={{ borderRadius: 8 }}>
-                解析文档
-              </Button>
-            )}
-            <Button
-              type="primary"
-              disabled={!parseResult || parseResult.modules.length === 0}
-              onClick={() => navigate(`/cost-estimate/config?projectId=${projectId}`)}
-              style={{ borderRadius: 8, fontWeight: 500 }}
-            >
-              下一步：参数配置
-              <ArrowRightOutlined style={{ marginLeft: 8 }} />
-            </Button>
-          </div>
+          <Button
+            type="primary"
+            disabled={!parseResult || parseResult.modules.length === 0}
+            onClick={() => navigate(`/cost-estimate/config?projectId=${projectId}`)}
+            style={{ borderRadius: 8, fontWeight: 500 }}
+          >
+            下一步：参数配置
+            <ArrowRightOutlined style={{ marginLeft: 8 }} />
+          </Button>
         </div>
       </Card>
     </div>
