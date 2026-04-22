@@ -13,12 +13,51 @@ import {
   SettingOutlined,
   BellOutlined,
   CheckCircleOutlined,
+  FileTextOutlined,
+  MonitorOutlined,
 } from '@ant-design/icons'
 import { useUserStore } from '@/store/userStore'
 import type { MenuProps } from 'antd'
 
 const { Header, Content } = AntLayout
 const { Text } = Typography
+
+// 自定义Logo图标：计算器+报表+美元符号
+const CostControlLogo = () => (
+  <svg width="24" height="24" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+    {/* 文档 */}
+    <rect x="10" y="15" width="45" height="65" rx="3" fill="white" fillOpacity="0.95"/>
+    <path d="M55 15 L60 20 L60 60 L55 55 Z" fill="white" fillOpacity="0.85"/>
+    
+    {/* 图表 */}
+    <rect x="20" y="45" width="8" height="35" rx="1" fill="#3B82F6"/>
+    <rect x="32" y="55" width="8" height="25" rx="1" fill="#3B82F6"/>
+    <rect x="44" y="65" width="8" height="15" rx="1" fill="#3B82F6"/>
+    
+    {/* 文档线条 */}
+    <line x1="20" y1="35" x2="45" y2="35" stroke="#3B82F6" strokeWidth="2" strokeLinecap="round"/>
+    <line x1="20" y1="40" x2="45" y2="40" stroke="#3B82F6" strokeWidth="2" strokeLinecap="round"/>
+    
+    {/* 计算器 */}
+    <rect x="60" y="35" width="35" height="45" rx="3" fill="white" fillOpacity="0.9"/>
+    <rect x="65" y="40" width="25" height="8" rx="2" fill="#8B5CF6"/>
+    
+    {/* 计算器按键 */}
+    <rect x="65" y="55" width="7" height="7" rx="1" fill="#8B5CF6"/>
+    <rect x="75" y="55" width="7" height="7" rx="1" fill="#8B5CF6"/>
+    <rect x="85" y="55" width="7" height="7" rx="1" fill="#8B5CF6"/>
+    <rect x="65" y="65" width="7" height="7" rx="1" fill="#8B5CF6"/>
+    <rect x="75" y="65" width="7" height="7" rx="1" fill="#8B5CF6"/>
+    <rect x="85" y="65" width="7" height="7" rx="1" fill="#8B5CF6"/>
+    <rect x="65" y="75" width="7" height="7" rx="1" fill="#8B5CF6"/>
+    <rect x="75" y="75" width="7" height="7" rx="1" fill="#8B5CF6"/>
+    <rect x="85" y="75" width="7" height="7" rx="1" fill="#8B5CF6"/>
+    
+    {/* 美元符号 */}
+    <circle cx="75" cy="25" r="10" fill="white" fillOpacity="0.95"/>
+    <path d="M75 20 L78 22 L77 25 L80 26 L75 30 L70 26 L73 25 L72 22 Z" fill="#3B82F6"/>
+  </svg>
+)
 
 // 导航配置
 const navConfig = [
@@ -32,32 +71,19 @@ const navConfig = [
     key: '/cost-estimate',
     label: '成本预估',
     icon: <CalculatorOutlined />,
-    description: '实施成本智能评估',
-    children: [
-      { key: '/cost-estimate/upload', label: '数据上传', icon: '📤' },
-      { key: '/cost-estimate/config', label: '参数配置', icon: '⚙️' },
-      { key: '/cost-estimate/result', label: '预估结果', icon: '📊' },
-    ],
+    description: '实施成本智能评估'
   },
   {
     key: '/cost-consumption',
     label: '成本消耗',
     icon: <BarChartOutlined />,
-    description: '成本追踪与预警',
-    children: [
-      { key: '/cost-consumption/input', label: '数据输入', icon: '📝' },
-      { key: '/cost-consumption/result', label: '预估结果', icon: '📈' },
-    ],
+    description: '成本追踪与预警'
   },
   {
     key: '/cost-deviation',
     label: '偏差监控',
     icon: <AlertOutlined />,
-    description: 'AI智能偏差分析',
-    children: [
-      { key: '/cost-deviation/input', label: '数据输入', icon: '🔍' },
-      { key: '/cost-deviation/result', label: '偏差结果', icon: '📉' },
-    ],
+    description: 'AI智能偏差分析'
   },
   {
     key: '/project',
@@ -186,7 +212,16 @@ function Layout() {
     if (hasChildren) {
       setActiveNav(activeNav === key ? null : key)
     } else {
-      navigate(key)
+      // 特殊处理：直接跳转到对应模块的输入/上传页面
+      if (key === '/cost-estimate') {
+        navigate('/cost-estimate/upload')
+      } else if (key === '/cost-consumption') {
+        navigate('/cost-consumption/input')
+      } else if (key === '/cost-deviation') {
+        navigate('/cost-deviation/input')
+      } else {
+        navigate(key)
+      }
       setActiveNav(null)
     }
   }
@@ -201,6 +236,23 @@ function Layout() {
 
   return (
     <AntLayout style={{ minHeight: '100vh', background: '#f8fafc' }}>
+      {/* 系统介绍区域 */}
+      <div
+        style={{
+          background: 'linear-gradient(135deg, #3B82F6 0%, #8B5CF6 100%)',
+          padding: '24px 24px',
+          textAlign: 'center',
+          color: '#fff',
+        }}
+      >
+        <Typography.Title level={3} style={{ color: '#fff', margin: 0, fontWeight: 700, fontSize: 24 }}>
+          成本智控平台
+        </Typography.Title>
+        <Typography.Text style={{ color: 'rgba(255, 255, 255, 0.9)', fontSize: 16, display: 'block', margin: '8px 0 0 0', lineHeight: 1.5 }}>
+          智能估算 · 精准管控 · 让每一分项目成本清晰可见
+        </Typography.Text>
+      </div>
+
       {/* 顶部导航栏 */}
       <Header
         style={{
@@ -234,14 +286,11 @@ function Layout() {
               boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)',
             }}
           >
-            <CalculatorOutlined style={{ color: '#fff', fontSize: 22 }} />
+            <CostControlLogo />
           </div>
           <div>
             <Text strong style={{ fontSize: 18, color: '#0f172a', letterSpacing: '-0.02em' }}>
-              IT项目智能
-            </Text>
-            <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: -2 }}>
-              成本管控平台
+              成本智控平台
             </Text>
           </div>
         </div>
