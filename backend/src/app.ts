@@ -38,10 +38,16 @@ app.use('/api', apiLimiter)
 // 认证端点严格限流（防止暴力破解）
 app.use('/api/auth/login', authLimiter)
 
-// AI 端点宽松限流（AI调用耗时较长）
+// AI 端点宽松限流（AI调用耗时较长）- 精准定位只对真正调用AI的路由
+// estimate: 全部涉及AI
 app.use('/api/estimate', aiLimiter)
-app.use('/api/consumption', aiLimiter)
-app.use('/api/deviation', aiLimiter)
+// consumption: 只有 /ocr 相关路由涉及AI，项目查询不涉及
+app.use('/api/consumption/ocr', aiLimiter)
+app.use('/api/consumption/ocr-preview', aiLimiter)
+// deviation: AI识别和建议涉及AI
+app.use('/api/deviation/upload', aiLimiter)
+app.use('/api/deviation/recognize', aiLimiter)
+app.use('/api/deviation/suggestion', aiLimiter)
 
 // API路由
 app.use('/api/auth', authRoutes)

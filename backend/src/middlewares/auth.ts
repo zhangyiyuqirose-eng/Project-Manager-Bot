@@ -24,11 +24,11 @@ export const authMiddleware = async (
   next: NextFunction
 ): Promise<void> => {
   // 设置默认用户信息，跳过认证
-  req.userId = 1
+  req.userId = 5
   req.user = {
-    id: 1,
-    username: 'admin',
-    name: '管理员',
+    id: 5,
+    username: 'pm',
+    name: '张三',
     role: 'pm'
   }
   next()
@@ -43,11 +43,11 @@ export const optionalAuth = async (
   next: NextFunction
 ): Promise<void> => {
   // 设置默认用户信息
-  req.userId = 1
+  req.userId = 5
   req.user = {
-    id: 1,
-    username: 'admin',
-    name: '管理员',
+    id: 5,
+    username: 'pm',
+    name: '张三',
     role: 'pm'
   }
   next()
@@ -60,11 +60,11 @@ export const requireRoles = (..._allowedRoles: string[]) => {
   return (req: Request, _res: Response, next: NextFunction): void => {
     // 设置默认用户信息
     if (!req.user) {
-      req.userId = 1
+      req.userId = 5
       req.user = {
-        id: 1,
-        username: 'admin',
-        name: '管理员',
+        id: 5,
+        username: 'pm',
+        name: '张三',
         role: 'pm'
       }
     }
